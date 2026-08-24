@@ -607,3 +607,108 @@ The system shall provide relevant industry-level outcome analytics.
 
 **FR-OUT-010**
 The system shall use verified outcome data to improve relevant platform recommendations where appropriate.
+
+# System Requirements
+
+## 18. Industry–Academia Collaboration
+
+> This is a major part of our base PS.
+
+| Requirement ID | Description |
+| :--- | :--- |
+| **FR-COL-001** | Industries shall be able to publish mentorship opportunities. |
+| **FR-COL-002** | Industries shall be able to publish workshops. |
+| **FR-COL-003** | Industries shall be able to publish guest lectures. |
+| **FR-COL-004** | Industries shall be able to publish live projects. |
+| **FR-COL-005** | Institutions shall be able to discover collaboration opportunities. |
+| **FR-COL-006** | Authorized users shall be able to participate in industry projects. |
+| **FR-COL-007** | The system shall maintain collaboration records. |
+| **FR-COL-008** | The system shall record relevant collaboration outcomes. |
+
+## 19. Document Management
+
+| Requirement ID | Description |
+| :--- | :--- |
+| **FR-DOC-001** | Students shall upload resumes and certificates. |
+| **FR-DOC-002** | Students shall upload relevant project and internship documents. |
+| **FR-DOC-003** | Authorized institutions shall manage permitted academic documents. |
+| **FR-DOC-004** | The system shall securely store documents. |
+| **FR-DOC-005** | The system shall enforce document-level access permissions. |
+| **FR-DOC-006** | The system shall maintain document metadata. |
+| **FR-DOC-007** | The system shall maintain appropriate document audit history. |
+
+## 20. Notification System
+
+| Requirement ID | Description |
+| :--- | :--- |
+| **FR-NOT-001** | The system shall notify students about relevant opportunities. |
+| **FR-NOT-002** | The system shall notify users about application status changes. |
+| **FR-NOT-003** | The system shall notify users about upcoming assessments. |
+| **FR-NOT-004** | The system shall notify users about interviews. |
+| **FR-NOT-005** | The system shall notify users about relevant training programs. |
+| **FR-NOT-006** | The system shall notify users about important deadlines. |
+
+## 21. Platform Administration
+
+| Requirement ID | Description |
+| :--- | :--- |
+| **FR-PLAT-001** | Platform administrators shall manage platform users. |
+| **FR-PLAT-002** | Platform administrators shall manage organizations. |
+| **FR-PLAT-003** | Platform administrators shall manage roles and permissions. |
+| **FR-PLAT-004** | Platform administrators shall manage the platform skill taxonomy. |
+| **FR-PLAT-005** | Platform administrators shall manage career-role definitions. |
+| **FR-PLAT-006** | Platform administrators shall manage assessment configurations. |
+| **FR-PLAT-007** | Platform administrators shall moderate platform content. |
+| **FR-PLAT-008** | Platform administrators shall monitor platform activity. |
+| **FR-PLAT-009** | Platform administrators shall access platform-level analytics. |
+| **FR-PLAT-010** | Platform administrators shall manage system configurations. |
+| **FR-PLAT-011** | Platform administrators shall access security and audit information. |
+
+## 22. AI Requirements
+
+> AI will be an intelligence layer, not the foundation of every feature.
+
+| Requirement ID | Description |
+| :--- | :--- |
+| **FR-AI-001** | The system may use AI for resume information extraction. |
+| **FR-AI-002** | The system may use AI for career recommendations. |
+| **FR-AI-003** | The system may use AI to explain skill gaps. |
+| **FR-AI-004** | The system may use AI for learning recommendations. |
+| **FR-AI-005** | The system may use AI for opportunity recommendations. |
+| **FR-AI-006** | The system may provide an AI career assistant. |
+| **FR-AI-007** | The system may generate role-specific interview questions. |
+| **FR-AI-008** | The system may provide AI-assisted mock interviews. |
+| **FR-AI-009** | The system may analyze industry skill requirements. |
+| **FR-AI-010** | AI-generated information shall be appropriately grounded in available data where required. |
+
+## One important architectural decision
+
+> With these actors, our permission model will eventually look roughly like:
+
+                        PLATFORM
+                                  │
+                            Platform Admin
+                                  │
+                 ┌────────────────┴────────────────┐
+                 │                                 │
+            INSTITUTION                         INDUSTRY
+                 │                                 │
+         Institution Admin                  Industry Admin
+                 │                                 │
+      Institution Normal User            Industry Normal User
+                 │                                 │
+                 └────────────────┬────────────────┘
+                                  │
+                               STUDENT
+                                  │
+                           Mentor / Trainer
+
+But this is only a conceptual hierarchy. We should not make the database authorization system depend on this visual hierarchy. We'll design proper RBAC + permissions + organization-level access control in the architecture phase.
+
+## Phase 1 status
+
+We now have the revised:
+
+### Actors → Functional Requirements → Student → Skills → Industry → Internship → Placement → Institution → Mentor → Employment Outcomes → Collaboration → AI → Administration
+
+Next, we should continue Phase 1 with the Non-Functional Requirements, Business Rules, Data Requirements, User Stories, and MVP/P1/P2 prioritization before we freeze the SRS.
