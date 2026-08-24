@@ -1,69 +1,172 @@
 # SkillBridge AI Backend
 
-FastAPI and PostgreSQL MVP backend for SkillBridge AI Phase 8 and Phase 9.
+Backend foundation for SkillBridge AI, an Academia-Industry collaboration and employability platform.
 
-## Scope
+This repository covers the assigned phases:
 
-Includes JWT authentication, bcrypt passwords, student profiles, skills, projects, certifications, achievements, internships, career interests, resumes, metadata, admin student views, Alembic migrations, seed data, Docker Compose, and tests.
+- Phase 8: Backend Foundation
+- Phase 9: Student Module
+- Phase 21: Employment Outcome Tracking
+- Phase 22: AI Layer with Gemini primary and OpenRouter fallback
+- Phase 23: Recommendation Engine foundation
 
-Does not include AI recommendations, resume parsing, skill-gap analysis, employability prediction, matching, interviews, placement prediction, or analytics dashboards.
+The design is modular so future phases can add models, schemas, services, and routers without rewriting authentication or student ownership rules.
 
-## Requirements
+## Implemented Phases
+
+### Phase 8: Backend Foundation
+
+- FastAPI with `/api/v1` prefix
+- PostgreSQL 16 with synchronous SQLAlchemy 2.x
+- Alembic migrations and model discovery
+- Pydantic v2 validation
+- Standard JSON success and error responses
+- JWT bearer authentication with expiry
+- Bcrypt password hashing
+- Role-based access control
+- Audit log service boundary
+- Shared database and pagination dependencies
+
+### Phase 9: Student Module
+
+- Student registration, login, and current-user endpoint
+- Student profile and completeness score
+- Student dashboard
+- Skills with proficiency and score
+- Projects, certifications, achievements, and internships
+- Preferred career roles
+- Resume upload, replacement, metadata, and download
+- Admin student list and details
+
+### Phase 21: Employment Outcome Tracking
+
+The `employment_outcomes` table and student-owned endpoints track employment status, company, job title, employment type, joining date, ending date, salary, and notes.
+
+```text
+GET   /api/v1/students/me/outcomes
+POST  /api/v1/students/me/outcomes
+PATCH /api/v1/students/me/outcomes/{outcome_id}
+```
+
+### Phase 22: AI Layer
+
+The `ai_executions` table provides an auditable provider-independent AI boundary. It stores feature, provider, model, input, output, status, errors, and timestamps.
+
+Provider order:
+
+```text
+Gemini primary -> retry -> OpenRouter fallback -> retry -> rule-based fallback
+```
+
+Provider keys remain server-side. If no provider key exists, the application remains usable through deterministic fallback recommendations.
+
+### Phase 23: Recommendation Engine
+
+The `recommendations` table stores normalized career, learning, project, internship, and job recommendations with title, reason, priority, source, context, status, and expiry.
+
+```text
+GET   /api/v1/students/me/recommendations
+POST  /api/v1/students/me/recommendations/generate
+PATCH /api/v1/students/me/recommendations/{recommendation_id}/status
+```
+
+## Architecture
+
+```text
+FastAPI Router
+    -> Auth and Role Dependencies
+    -> Domain Service
+    -> SQLAlchemy Model
+    -> PostgreSQL
+    -> Standard JSON Response
+```
+
+AI flow:
+
+```text
+Student Context -> AIExecution(PENDING) -> Gemini -> OpenRouter -> JSON validation -> Recommendations
+```
+
+PostgreSQL is the only required data service. Uploaded resume/document bytes are stored in PostgreSQL `student_documents.file_data` (`BYTEA`/`LargeBinary`). The application does not write uploaded documents to the filesystem.
+
+Detailed design documents:
+
+- `docs/phase_integration_map.md`
+- `docs/phase_21_23_architecture.md`
+- `docs/ai_provider_setup.md`
+
+## Technology Stack
 
 - Python 3.11+
-- Docker Desktop with Docker Compose
-- PostgreSQL 16 through Docker Compose
+- FastAPI
+- PostgreSQL 16
+- SQLAlchemy 2.x
+- Alembic
+- Pydantic v2 and pydantic-settings
+- python-jose JWT
+- passlib and bcrypt
+- pytest and httpx
 
 ## Installation
 
-Create a virtual environment, activate it, install dependencies, and copy the environment file:
+Docker is not required. Install PostgreSQL 16 locally or use a managed PostgreSQL instance.
 
-`python -m venv .venv`
+```powershell
+python -m venv .venv
+.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+Copy-Item .env.example .env
+```
 
-`.venv\Scripts\Activate.ps1`
+Create PostgreSQL databases named `skillbridge` and `skillbridge_test`, then update `.env` if your credentials differ.
 
-`python -m pip install --upgrade pip`
+## Environment Variables
 
-`python -m pip install -r requirements.txt`
+```env
+DATABASE_URL=postgresql+psycopg://skillbridge:skillbridge@localhost:5432/skillbridge
+TEST_DATABASE_URL=postgresql+psycopg://skillbridge:skillbridge@localhost:5432/skillbridge_test
+SECRET_KEY=change-this-secret-key
+ACCESS_TOKEN_EXPIRE_MINUTES=60
+CORS_ORIGINS=http://localhost:5173,http://localhost:3000
+MAX_RESUME_SIZE_MB=5
+AI_PROVIDER=gemini
+GEMINI_API_KEY=
+GEMINI_MODEL=gemini-2.5-flash
+OPENROUTER_API_KEY=
+OPENROUTER_MODEL=openai/gpt-4o-mini
+AI_TIMEOUT_SECONDS=20
+AI_MAX_RETRIES=2
+```
 
-`Copy-Item .env.example .env`
+Never commit real API keys or production secrets.
 
-If activation is blocked, run `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`.
+## Database Migrations
 
-## Environment
+```powershell
+alembic revision --autogenerate -m "phase 8 9 21 22 23 tables"
+alembic upgrade head
+alembic history
+```
 
-`.env.example` contains local values for database URLs, JWT secret, token expiry, CORS, upload directory, and resume size. For production, set `DEBUG=false`, use a long random `SECRET_KEY`, secure database credentials, and restricted CORS origins.
+Current migration head: `0002_phase_21_23_and_db_files`.
 
-## PostgreSQL
+## Seed Demo Data
 
-Start PostgreSQL with `docker compose up -d`. Check it with `docker ps` and `docker logs skillbridge-postgres`.
+```powershell
+python -m app.scripts.seed
+```
 
-Local database: host `localhost`, port `5432`, database `skillbridge`, user `skillbridge`, password `skillbridge`.
-
-## Migrations
-
-Generate a migration with `alembic revision --autogenerate -m "phase 8 and phase 9 tables"`.
-
-Apply migrations with `alembic upgrade head`.
-
-Other commands: `alembic history` and `alembic downgrade -1`.
-
-`alembic/env.py` reads settings, imports `app.models`, and uses `Base.metadata`.
-
-## Seed Data
-
-Run `python -m app.scripts.seed`.
-
-Demo accounts:
+Local demo accounts:
 
 - Admin: `admin@example.com` / `Admin@123`
 - Student: `student@example.com` / `Student@123`
 
-Use these credentials only for local development.
-
 ## Run the API
 
-Run `uvicorn app.main:app --reload`.
+```powershell
+uvicorn app.main:app --reload
+```
 
 - API: `http://127.0.0.1:8000/api/v1`
 - Swagger: `http://127.0.0.1:8000/docs`
@@ -72,13 +175,18 @@ Run `uvicorn app.main:app --reload`.
 
 ## Authentication
 
-Register or log in to receive a JWT. Send it as `Authorization: Bearer <access_token>`.
+Register or log in to receive a JWT. Use it with:
 
-Endpoints: `POST /api/v1/auth/register/student`, `POST /api/v1/auth/login`, and `GET /api/v1/auth/me`.
+```text
+Authorization: Bearer <access_token>
+```
+
+JWT claims include `sub`, role, issue time, and expiration. Password hashes are never returned.
 
 ## Main API Areas
 
-- Profile: `/api/v1/students/me`, `/completeness`, `/dashboard`
+- Authentication: `/api/v1/auth/*`
+- Student profile: `/api/v1/students/me`
 - Skills: `/api/v1/students/me/skills`
 - Projects: `/api/v1/students/me/projects`
 - Certifications: `/api/v1/students/me/certifications`
@@ -86,53 +194,56 @@ Endpoints: `POST /api/v1/auth/register/student`, `POST /api/v1/auth/login`, and 
 - Internships: `/api/v1/students/me/internships`
 - Career interests: `/api/v1/students/me/career-interests`
 - Resume: `/api/v1/students/me/resume`
+- Outcomes: `/api/v1/students/me/outcomes`
+- Recommendations: `/api/v1/students/me/recommendations`
 - Metadata: `/api/v1/meta/skills`, `/api/v1/meta/career-roles`
 - Admin: `/api/v1/admin/students`
 
 ## Response Format
 
-Success responses use `{"success": true, "data": ...}`. Errors use `{"success": false, "error": {"code": ..., "message": ...}}`.
+Success: `{"success": true, "data": {}}`
 
-Common codes: `VALIDATION_ERROR`, `UNAUTHORIZED`, `FORBIDDEN`, `NOT_FOUND`, `CONFLICT`, `INTERNAL_ERROR`.
+Error: `{"success": false, "error": {"code": "UNAUTHORIZED", "message": "Unauthorized"}}`
 
-## Resume Uploads
+Common codes: `VALIDATION_ERROR`, `UNAUTHORIZED`, `FORBIDDEN`, `NOT_FOUND`, `CONFLICT`, and `INTERNAL_ERROR`.
 
-Use multipart form data with field `file`. Allowed extensions are `.pdf`, `.doc`, and `.docx`. Maximum size is controlled by `MAX_RESUME_SIZE_MB`. Files are stored under `storage/resumes/{student_id}/{uuid}.{extension}`. A new upload deactivates the previous active resume.
+## AI Provider Setup
+
+Gemini is primary and OpenRouter is fallback. Add keys only to the backend `.env` file. The recommendation endpoint remains usable without keys through rule-based fallback.
 
 ## Testing
 
-Create the test database with `docker exec -it skillbridge-postgres psql -U skillbridge -c "CREATE DATABASE skillbridge_test;"`.
+Create the separate PostgreSQL test database, then run:
 
-Run all tests with `pytest -q`. Use `pytest -v` for verbose output or `pytest -q tests/test_auth.py` for one file.
+```powershell
+pytest -q
+pytest -v
+```
 
-## Useful Docker Commands
+Tests cover health, authentication guards, architecture metadata, provider failover, and student route behavior. Full database tests require PostgreSQL to be running.
 
-Stop the database with `docker compose down`.
+## Security and Reliability
 
-Stop and delete local database data with `docker compose down -v`.
+- Passwords use bcrypt.
+- JWT signature and expiry are validated.
+- Invalid token subjects and inactive users are rejected.
+- Role-based access control protects routes.
+- Students can access only their own records.
+- Document binary data is not exposed in metadata responses.
+- Provider API keys stay server-side.
+- AI failures are recorded and use deterministic fallback.
+- Authorization, validation, ownership, and workflow rules remain non-AI.
 
-Open PostgreSQL with `docker exec -it skillbridge-postgres psql -U skillbridge -d skillbridge`.
+## Future Phase Compatibility
+
+Future phases can add independent modules for skill intelligence, career intelligence, learning, internships, jobs, assessments, interviews, dashboards, analytics, deployment, monitoring, and scalability. Existing authentication, ownership, outcome, AI execution, and recommendation boundaries are designed to remain stable.
 
 ## Troubleshooting
 
-- PostgreSQL connection refused: run `docker compose up -d` and inspect `docker logs skillbridge-postgres`.
-- Test database missing: run the database creation command above.
-- Alembic model failure: confirm `alembic/env.py` imports `app.models` and sets `target_metadata = Base.metadata`.
-- JWT 401: check bearer header, token expiry, `SECRET_KEY`, and active user status.
-- Admin 403: the authenticated user must have role `ADMIN`.
-- Resume failure: check extension, size, `UPLOAD_DIR`, and storage permissions.
-
-## Security Notes
-
-Password hashes are never returned. Passwords use bcrypt. JWTs expire and require valid `sub` and `exp` claims. Role-based access control protects routes. Students can access only their own records. Resume downloads validate the resolved path against `UPLOAD_DIR`. Never commit `.env`, secrets, or uploaded files.
-
-## Production Checklist
-
-- Set `DEBUG=false`.
-- Use a strong unique `SECRET_KEY`.
-- Use secure PostgreSQL credentials.
-- Serve through HTTPS.
-- Restrict CORS origins.
-- Store resumes in private durable storage.
-- Add reverse-proxy rate limiting.
-- Rotate secrets and credentials regularly.
+- PostgreSQL connection refused: start PostgreSQL and verify `DATABASE_URL`.
+- Database missing: create `skillbridge` and `skillbridge_test`.
+- Migration failure: confirm `alembic/env.py` imports `app.models` and uses `Base.metadata`.
+- JWT 401: check bearer header, expiry, `SECRET_KEY`, and active user status.
+- Admin 403: the user must have role `ADMIN`.
+- Resume failure: check extension, size, and PostgreSQL availability.
+- AI fallback: configure `GEMINI_API_KEY` and optionally `OPENROUTER_API_KEY`.
