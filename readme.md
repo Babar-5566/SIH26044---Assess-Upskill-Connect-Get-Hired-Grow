@@ -1,4 +1,4 @@
-is a centralized, intelligent Academia–Industry collaboration and employability platform designed to bridge the gap between academic learning and industry requirements.
+This is a centralized, intelligent Academia–Industry collaboration and employability platform designed to bridge the gap between academic learning and industry requirements.
 
 The platform brings together students, academicians, educational institutions, and industries into a single ecosystem. Students can create comprehensive digital profiles, assess their technical and soft skills, identify skill gaps against desired career roles, receive personalized learning and career recommendations, discover relevant internships and job opportunities, prepare for assessments and interviews, and track their applications and placement progress.
 
