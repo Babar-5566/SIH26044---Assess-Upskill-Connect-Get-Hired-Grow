@@ -5,8 +5,7 @@ Ei guide-ta Phase 8 backend foundation ebong Phase 9 student module run korar jo
 ## Requirements
 
 - Python 3.11+
-- Docker Desktop
-- Docker Compose
+- PostgreSQL 16 locally or a managed PostgreSQL instance
 
 ## Installation
 
@@ -26,12 +25,7 @@ Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
 
 ## Start PostgreSQL
 
-```powershell
-docker compose up -d
-docker ps
-```
-
-Local database: `localhost:5432`, database `skillbridge`, user `skillbridge`, password `skillbridge`.
+Docker is not required. Install PostgreSQL 16 locally or use a managed PostgreSQL service. Create a `skillbridge` database and set `DATABASE_URL` in `.env`.
 
 ## Migrations and Seed
 
@@ -65,19 +59,12 @@ uvicorn app.main:app --reload
 
 ## Test Database and Tests
 
+Create a separate PostgreSQL database named `skillbridge_test`, then run:
+
 ```powershell
-docker exec -it skillbridge-postgres psql -U skillbridge -c "CREATE DATABASE skillbridge_test;"
 pytest -q
 ```
 
 ## Resume Storage
 
-Resume files are stored at `storage/resumes/{student_id}/{uuid}.{extension}`. Allowed extensions are `pdf`, `doc`, and `docx`. Maximum size is controlled by `MAX_RESUME_SIZE_MB`.
-
-## Stop Services
-
-```powershell
-docker compose down
-```
-
-`docker compose down -v` also deletes the local PostgreSQL volume and its data.
+Resume binary data is stored in PostgreSQL in the `student_documents.file_data` column. Allowed extensions are `pdf`, `doc`, and `docx`. Maximum size is controlled by `MAX_RESUME_SIZE_MB`.

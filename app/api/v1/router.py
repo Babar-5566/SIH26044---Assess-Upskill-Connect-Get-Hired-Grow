@@ -1,14 +1,17 @@
 import uuid
 from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query
-from fastapi.responses import FileResponse
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 from app.api.deps import get_current_user, require_roles
 from app.db.session import get_db
-from app.models import User, StudentSkill, StudentProject, StudentCertification, StudentAchievement, StudentInternship, StudentPreferredRole, StudentDocument, Skill, CareerRole
+from app.models import User, StudentSkill, StudentProject, StudentCertification, StudentAchievement, StudentInternship, StudentPreferredRole, StudentDocument, Skill, CareerRole, EmploymentOutcome, Recommendation
 from app.schemas.auth import RegisterStudent, Login
 from app.schemas.student import ProfileUpdate, SkillIn, SkillPatch, ProjectIn, CertificationIn, AchievementIn, InternshipIn, CareerInterestIn
-from app.services import auth_service, student_service, skill_service, resume_service
+from app.schemas.intelligence import OutcomeIn, OutcomePatch
+from app.services import auth_service, student_service, skill_service, resume_service, ai_service, recommendation_service
+from app.ai.prompts import SYSTEM_PROMPT, recommendation_prompt
+from app.ai.base import ProviderError
 from app.core.response import success
 from app.core.config import settings
 
@@ -19,7 +22,8 @@ def serialize(value):
     if isinstance(value, uuid.UUID): return str(value)
     if isinstance(value, list): return [serialize(x) for x in value]
     if isinstance(value, dict): return {k: serialize(v) for k, v in value.items()}
-    if hasattr(value, "__table__"): return {c.name: serialize(getattr(value, c.name)) for c in value.__table__.columns}
+    if hasattr(value, "__table__"):
+        return {c.name: serialize(getattr(value, c.name)) for c in value.__table__.columns if c.name not in {"file_data", "password_hash"}}
     return str(value)
 
 def public_user(user: User) -> dict:
@@ -59,6 +63,54 @@ def completeness(user=Depends(require_roles("STUDENT")), db=Depends(get_db)): re
 def dashboard(user=Depends(require_roles("STUDENT")), db=Depends(get_db)):
     profile = student_service.profile(db, user)
     return success({"profile_completeness": student_service.completeness(db, user)["score"], **profile["counts"], "has_resume": bool(profile["resume"]), "preferred_roles": serialize(profile["preferred_roles"])})
+
+@students.get("/outcomes")
+def list_outcomes(user=Depends(require_roles("STUDENT")), db=Depends(get_db)):
+    rows = db.query(EmploymentOutcome).filter_by(student_id=user.id).order_by(EmploymentOutcome.created_at.desc()).all()
+    return success(serialize(rows))
+
+@students.post("/outcomes", status_code=201)
+def create_outcome(data: OutcomeIn, user=Depends(require_roles("STUDENT")), db=Depends(get_db)):
+    payload = data.model_dump()
+    if payload.get("joined_on") and payload.get("ended_on") and payload["ended_on"] < payload["joined_on"]:
+        raise HTTPException(422, "ended_on must not be before joined_on")
+    row = EmploymentOutcome(student_id=user.id, **payload)
+    db.add(row); db.commit(); db.refresh(row)
+    return success(serialize(row))
+
+@students.patch("/outcomes/{outcome_id}")
+def update_outcome(outcome_id: uuid.UUID, data: OutcomePatch, user=Depends(require_roles("STUDENT")), db=Depends(get_db)):
+    row = db.query(EmploymentOutcome).filter_by(id=outcome_id, student_id=user.id).first()
+    if not row: raise HTTPException(404, "Employment outcome not found")
+    for key, value in data.model_dump(exclude_unset=True).items(): setattr(row, key, value)
+    if row.joined_on and row.ended_on and row.ended_on < row.joined_on: raise HTTPException(422, "ended_on must not be before joined_on")
+    db.commit(); db.refresh(row)
+    return success(serialize(row))
+
+@students.get("/recommendations")
+def list_recommendations(user=Depends(require_roles("STUDENT")), db=Depends(get_db)):
+    rows = db.query(Recommendation).filter_by(student_id=user.id, status="ACTIVE").order_by(Recommendation.priority.desc(), Recommendation.created_at.desc()).all()
+    return success(serialize(rows))
+
+@students.post("/recommendations/generate", status_code=201)
+def generate_recommendations(user=Depends(require_roles("STUDENT")), db=Depends(get_db)):
+    profile = student_service.profile(db, user)
+    context = {"profile": serialize(profile["profile"]), "counts": profile["counts"], "preferred_roles": serialize(profile["preferred_roles"]), "skills": serialize(db.query(StudentSkill).filter_by(student_id=user.id).all())}
+    try:
+        execution, output = ai_service.generate(db, user.id, "RECOMMENDATIONS", SYSTEM_PROMPT, recommendation_prompt(context))
+        rows = recommendation_service.create_from_ai(db, user.id, output, execution.provider or "AI")
+        return success({"execution": serialize(execution), "recommendations": serialize(rows)})
+    except ProviderError:
+        rows = recommendation_service.rule_based_fallback(db, user.id, context)
+        return success({"execution": None, "recommendations": serialize(rows), "fallback": "RULE_BASED"})
+
+@students.patch("/recommendations/{recommendation_id}/status")
+def update_recommendation_status(recommendation_id: uuid.UUID, status: str, user=Depends(require_roles("STUDENT")), db=Depends(get_db)):
+    if status not in {"DISMISSED", "COMPLETED"}: raise HTTPException(422, "Status must be DISMISSED or COMPLETED")
+    row = db.query(Recommendation).filter_by(id=recommendation_id, student_id=user.id).first()
+    if not row: raise HTTPException(404, "Recommendation not found")
+    row.status = status; db.commit(); db.refresh(row)
+    return success(serialize(row))
 
 @students.get("/skills")
 def list_skills(user=Depends(require_roles("STUDENT")), db=Depends(get_db)):
@@ -127,11 +179,11 @@ def put_interests(data: CareerInterestIn, user=Depends(require_roles("STUDENT"))
 
 @students.post("/resume", status_code=201)
 def upload_resume(file: UploadFile = File(...), user=Depends(require_roles("STUDENT")), db=Depends(get_db)):
-    try: path, size = resume_service.save_resume(file, user.id)
+    try: data, size, ext, safe_name = resume_service.read_resume(file)
     except ValueError as exc: raise HTTPException(400, str(exc))
     db.query(StudentDocument).filter_by(student_id=user.id, document_type="RESUME", is_active=True).update({"is_active": False})
-    row = StudentDocument(student_id=user.id, file_name=file.filename, file_path=str(path), file_size=size, mime_type=file.content_type)
-    db.add(row); user.profile.resume_file_url = str(path); db.commit(); db.refresh(row); return success(serialize(row))
+    row = StudentDocument(student_id=user.id, file_name=safe_name, file_data=data, file_size=size, mime_type=file.content_type)
+    db.add(row); user.profile.resume_file_url = f"/api/v1/students/me/resume/download"; db.commit(); db.refresh(row); return success(serialize(row))
 @students.get("/resume")
 def get_resume(user=Depends(require_roles("STUDENT")), db=Depends(get_db)):
     row = db.query(StudentDocument).filter_by(student_id=user.id, document_type="RESUME", is_active=True).first()
@@ -140,8 +192,8 @@ def get_resume(user=Depends(require_roles("STUDENT")), db=Depends(get_db)):
 @students.get("/resume/download")
 def download_resume(user=Depends(require_roles("STUDENT")), db=Depends(get_db)):
     row = db.query(StudentDocument).filter_by(student_id=user.id, document_type="RESUME", is_active=True).first()
-    if not row or not Path(row.file_path).resolve().is_relative_to(Path(settings.upload_dir).resolve()): raise HTTPException(404, "Resume not found")
-    return FileResponse(row.file_path, filename=row.file_name, media_type=row.mime_type)
+    if not row: raise HTTPException(404, "Resume not found")
+    return Response(content=row.file_data, media_type=row.mime_type or "application/octet-stream", headers={"Content-Disposition": f'attachment; filename="{row.file_name}"'})
 router.include_router(students)
 
 admin = APIRouter(prefix="/admin", tags=["admin"])

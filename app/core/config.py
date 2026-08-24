@@ -11,6 +11,13 @@ class Settings(BaseSettings):
     cors_origins: list[str] = ["http://localhost:5173", "http://localhost:3000"]
     upload_dir: str = "storage"
     max_resume_size_mb: int = 5
+    ai_provider: str = "gemini"
+    gemini_api_key: SecretStr | None = None
+    gemini_model: str = "gemini-2.5-flash"
+    openrouter_api_key: SecretStr | None = None
+    openrouter_model: str = "openai/gpt-4o-mini"
+    ai_timeout_seconds: float = 20.0
+    ai_max_retries: int = 2
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
     @field_validator("cors_origins", mode="before")
     @classmethod
@@ -26,5 +33,8 @@ class Settings(BaseSettings):
     @property
     def secret_value(self) -> str:
         return self.secret_key.get_secret_value()
+
+    def optional_secret(self, value: SecretStr | None) -> str | None:
+        return value.get_secret_value() if value else None
 
 settings = Settings()

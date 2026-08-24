@@ -798,7 +798,7 @@ BACKEND LOCAL SETUP
 1. Create and activate a virtual environment.
 2. Install dependencies with `python -m pip install -r requirements.txt`.
 3. Copy `.env.example` to `.env`.
-4. Start PostgreSQL with `docker compose up -d`.
+4. Start PostgreSQL 16 locally or connect to a managed PostgreSQL instance.
 5. Apply migrations with `alembic upgrade head`.
 6. Seed demo data with `python -m app.scripts.seed`.
 7. Start the API with `uvicorn app.main:app --reload`.
@@ -821,8 +821,8 @@ Generate migrations with `alembic revision --autogenerate -m "phase 8 and phase 
 
 Create the test database with:
 
-`docker exec -it skillbridge-postgres psql -U skillbridge -c "CREATE DATABASE skillbridge_test;"`
+Create a separate PostgreSQL database named `skillbridge_test` using pgAdmin or `psql`.
 
 Run tests with `pytest -q`.
 
-For backend details, see `.env.example`, `docker-compose.yml`, `requirements.txt`, `alembic/`, `app/`, and `tests/`.
+For backend details, see `.env.example`, `requirements.txt`, `alembic/`, `app/`, `docs/phase_21_23_architecture.md`, and `tests/`.
