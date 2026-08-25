@@ -51,6 +51,18 @@ def test_initial_revision_does_not_create_later_feature_tables():
     assert '"assessments"' not in source.split("initial_tables =", 1)[1].split("}", 1)[0]
 
 
+def test_revisions_do_not_import_runtime_application_or_create_metadata():
+    versions = Path(__file__).parents[1] / "alembic" / "versions"
+    for path in versions.glob("[0-9][0-9][0-9][0-9]_*.py"):
+        source = path.read_text(encoding="utf-8")
+        assert "from app" not in source, path.name
+        assert "import app" not in source, path.name
+        assert ".metadata.create_all" not in source, path.name
+        assert ".metadata.drop_all" not in source, path.name
+        assert "sa.inspect(" not in source, path.name
+        assert "inspect(op.get_bind())" not in source, path.name
+
+
 def test_organization_backfill_uses_valid_correlated_update():
     migration = Path(__file__).parents[1] / "alembic" / "versions" / "0010_organization_scope_and_backfill.py"
     source = migration.read_text(encoding="utf-8")

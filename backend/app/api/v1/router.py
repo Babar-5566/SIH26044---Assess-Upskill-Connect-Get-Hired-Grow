@@ -1,4 +1,7 @@
 import uuid
+from enum import Enum
+from datetime import date, datetime
+from pydantic import AnyUrl
 from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query
 from fastapi.responses import Response
@@ -40,6 +43,20 @@ def serialize(value):
         return {c.name: serialize(getattr(value, c.name)) for c in value.__table__.columns if c.name not in {"file_data", "password_hash"}}
     return str(value)
 
+def sqlalchemy_payload(value):
+    """Convert Pydantic wrapper values while preserving SQLAlchemy-native types."""
+    if isinstance(value, AnyUrl):
+        return str(value)
+    if isinstance(value, Enum):
+        return value.value
+    if isinstance(value, (uuid.UUID, date, datetime)) or value is None:
+        return value
+    if isinstance(value, list):
+        return [sqlalchemy_payload(item) for item in value]
+    if isinstance(value, dict):
+        return {key: sqlalchemy_payload(item) for key, item in value.items()}
+    return value
+
 def public_user(user: User) -> dict:
     return {"id": str(user.id), "email": user.email, "role": user.role, "is_active": user.is_active}
 
@@ -51,9 +68,11 @@ auth = APIRouter(prefix="/auth", tags=["auth"])
 def register(data: RegisterStudent, db: Session = Depends(get_db)):
     try:
         user, token = auth_service.register(db, data.email, data.password, data.first_name, data.last_name)
+    except auth_service.DuplicateEmailError:
+        raise HTTPException(409, "Email already exists")
     except ValueError as exc:
         if str(exc) == "password": raise HTTPException(422, "Password must be between 8 and 72 characters")
-        raise HTTPException(409, "Email already exists")
+        raise
     return success({"user": public_user(user), "access_token": token, "token_type": "bearer"})
 @auth.post("/login")
 def login(data: Login, db: Session = Depends(get_db)):
@@ -157,7 +176,7 @@ def add_collection_routes(path, model, schema):
         return success({"items": serialize(query.offset(skip).limit(limit).all()), "total": query.count(), "limit": limit, "skip": skip})
     @students.post(f"/{path}", status_code=201)
     def create_item(data: schema, user=Depends(require_roles("STUDENT")), db=Depends(get_db)):
-        payload = data.model_dump()
+        payload = sqlalchemy_payload(data.model_dump())
         if payload.get("start_date") and payload.get("end_date") and payload["end_date"] <= payload["start_date"]: raise HTTPException(422, "end_date must be after start_date")
         if payload.get("issue_date") and payload.get("expiry_date") and payload["expiry_date"] <= payload["issue_date"]: raise HTTPException(422, "expiry_date must be after issue_date")
         row = model(student_id=user.id, **payload); db.add(row); db.commit(); db.refresh(row); return success(serialize(row))
@@ -170,7 +189,7 @@ def add_collection_routes(path, model, schema):
     def update_item(item_id: uuid.UUID, data: schema, user=Depends(require_roles("STUDENT")), db=Depends(get_db)):
         row = db.query(model).filter_by(id=item_id, student_id=user.id).first()
         if not row: raise HTTPException(404, "Not found")
-        for key, value in data.model_dump(exclude_unset=True).items(): setattr(row, key, value)
+        for key, value in sqlalchemy_payload(data.model_dump(exclude_unset=True)).items(): setattr(row, key, value)
         db.commit(); db.refresh(row); return success(serialize(row))
     @students.delete(f"/{path}/{{item_id}}", status_code=204)
     def delete_item(item_id: uuid.UUID, user=Depends(require_roles("STUDENT")), db=Depends(get_db)):

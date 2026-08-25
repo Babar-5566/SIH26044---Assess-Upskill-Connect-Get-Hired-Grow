@@ -1,8 +1,9 @@
 from app.models import User, StudentProfile
 from app.core.security import hash_password, verify_password, create_access_token
+class DuplicateEmailError(ValueError): pass
 def register(db,email,password,first_name,last_name):
  if len(password) < 8 or len(password) > 72: raise ValueError('password')
- if db.query(User).filter_by(email=email).first(): raise ValueError('exists')
+ if db.query(User).filter(User.email == email).first(): raise DuplicateEmailError('exists')
  u=User(email=email,password_hash=hash_password(password),role='STUDENT'); db.add(u); db.flush(); db.add(StudentProfile(user_id=u.id,first_name=first_name,last_name=last_name)); db.commit(); db.refresh(u); return u,create_access_token(str(u.id),u.role)
 def login(db,email,password):
  u=db.query(User).filter_by(email=email).first()

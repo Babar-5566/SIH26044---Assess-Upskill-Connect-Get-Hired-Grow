@@ -19,7 +19,7 @@ def override_get_db():
 
 @pytest.fixture
 def client():
-    tables = [Base.metadata.tables[name] for name in ("users", "student_profiles", "skills", "student_skills", "organizations", "organization_memberships") if name in Base.metadata.tables]
+    tables = [Base.metadata.tables[name] for name in ("users", "student_profiles", "skills", "student_skills", "student_projects", "student_certifications", "student_achievements", "student_internships", "organizations", "organization_memberships") if name in Base.metadata.tables]
     Base.metadata.create_all(engine, tables=tables)
     app.dependency_overrides[get_db] = override_get_db
     with TestClient(app) as test_client:

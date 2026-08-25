@@ -52,10 +52,8 @@ export default function LoginPage() {
         </p>
         <div className="mt-6 p-3 bg-gray-50 rounded-lg text-xs text-gray-500">
           <p className="font-medium mb-1">Demo accounts:</p>
-          <p>Student: student@demo.com / Demo@123</p>
-          <p>Company: company@demo.com / Demo@123</p>
-          <p>Academician: faculty@demo.com / Demo@123</p>
-          <p>Institution: college@demo.com / Demo@123</p>
+          <p>Student: student@example.com / Student@123</p>
+          <p>Admin: admin@example.com / Admin@123</p>
         </div>
       </div>
     </div>

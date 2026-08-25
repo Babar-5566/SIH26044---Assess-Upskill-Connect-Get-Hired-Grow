@@ -7,15 +7,11 @@ branch_labels = None
 depends_on = None
 
 def upgrade():
-    inspector = sa.inspect(op.get_bind())
-    document_columns = {column["name"] for column in inspector.get_columns("student_documents")}
-    if "file_data" not in document_columns:
-        op.add_column("student_documents", sa.Column("file_data", sa.LargeBinary(), nullable=True))
-    if "file_path" in document_columns:
-        op.drop_column("student_documents", "file_path")
-    existing_tables = set(inspector.get_table_names())
-    if "employment_outcomes" in existing_tables:
-        return
+    # 0001 already creates binary document storage on a clean migration chain.
+    # These PostgreSQL-safe statements retain compatibility with older stamped
+    # databases without requiring connection inspection in offline mode.
+    op.execute("ALTER TABLE student_documents ADD COLUMN IF NOT EXISTS file_data BYTEA")
+    op.execute("ALTER TABLE student_documents DROP COLUMN IF EXISTS file_path")
     op.create_table(
         "employment_outcomes",
         sa.Column("id", sa.Uuid(), nullable=False), sa.Column("student_id", sa.Uuid(), nullable=False),
@@ -50,4 +46,5 @@ def downgrade():
     op.drop_index("ix_recommendations_student_id", table_name="recommendations"); op.drop_table("recommendations")
     op.drop_index("ix_ai_executions_feature", table_name="ai_executions"); op.drop_index("ix_ai_executions_user_id", table_name="ai_executions"); op.drop_table("ai_executions")
     op.drop_index("ix_employment_outcomes_student_id", table_name="employment_outcomes"); op.drop_table("employment_outcomes")
-    op.add_column("student_documents", sa.Column("file_path", sa.String(500), nullable=True)); op.drop_column("student_documents", "file_data")
+    op.execute("ALTER TABLE student_documents ADD COLUMN IF NOT EXISTS file_path VARCHAR(500)")
+    op.execute("ALTER TABLE student_documents DROP COLUMN IF EXISTS file_data")
