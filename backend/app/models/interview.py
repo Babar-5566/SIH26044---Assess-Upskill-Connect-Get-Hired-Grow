@@ -10,6 +10,7 @@ class InterviewSession(Base):
     __tablename__ = "interview_sessions"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    organization_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="SET NULL"), index=True)
     student_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     interview_type = Column(ENUM(InterviewType, name="interview_type"), nullable=False)
     target_role = Column(String(100), nullable=False)

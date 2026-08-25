@@ -12,7 +12,7 @@ def mine(db: Session=Depends(get_db), user=Depends(require_role("STUDENT"))):
  return db.query(EmploymentOutcome).filter_by(student_id=user.id).order_by(EmploymentOutcome.created_at.desc()).all()
 @router.post("/me", status_code=201)
 def create(data: OutcomeIn, db: Session=Depends(get_db), user=Depends(require_role("STUDENT"))):
- row=EmploymentOutcome(student_id=user.id,**data.model_dump()); db.add(row); db.flush(); db.add(Notification(user_id=user.id,title="Employment outcome recorded",message="Your employment outcome was saved.",kind="OUTCOME")); db.commit(); db.refresh(row); return row
+ row=EmploymentOutcome(student_id=user.id, organization_id=getattr(user, "active_organization_id", None), **data.model_dump()); db.add(row); db.flush(); db.add(Notification(user_id=user.id,title="Employment outcome recorded",message="Your employment outcome was saved.",kind="OUTCOME")); db.commit(); db.refresh(row); return row
 @router.patch("/me/{outcome_id}")
 def update(outcome_id: UUID,data: OutcomePatch,db: Session=Depends(get_db),user=Depends(require_role("STUDENT"))):
  row=db.query(EmploymentOutcome).filter_by(id=outcome_id,student_id=user.id).first()

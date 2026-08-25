@@ -1,7 +1,7 @@
 import React from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
-import { BookOpen, Briefcase, GraduationCap, LogOut, LayoutDashboard } from 'lucide-react'
+import { BookOpen, Briefcase, GraduationCap, LogOut, LayoutDashboard, Building2, Users } from 'lucide-react'
 
 export default function Sidebar() {
   const { user, logout } = useAuth()
@@ -14,25 +14,34 @@ export default function Sidebar() {
     { to: '/student/internships', icon: <Briefcase size={18} />, label: 'Internships' },
     { to: '/student/internships/applications', icon: <LayoutDashboard size={18} />, label: 'My Applications' },
     { to: '/student/certifications', icon: <GraduationCap size={18} />, label: 'Certifications' },
+    { to: '/student/assessments', icon: <GraduationCap size={18} />, label: 'Assessments' },
+    { to: '/student/interviews', icon: <Briefcase size={18} />, label: 'Interview Practice' },
+    { to: '/student/mentorship', icon: <LayoutDashboard size={18} />, label: 'Mentorship' },
+    { to: '/student/outcomes', icon: <LayoutDashboard size={18} />, label: 'Career Outcomes' },
+    { to: '/student/jobs', icon: <Briefcase size={18} />, label: 'Jobs' },
   ]
   const companyLinks = [
     { to: '/company/internships', icon: <Briefcase size={18} />, label: 'My Postings' },
     { to: '/company/internships/new', icon: <LayoutDashboard size={18} />, label: 'Post Internship' },
     { to: '/company/opportunities/new', icon: <GraduationCap size={18} />, label: 'Post FDP / Opportunity' },
+    ...(user?.role === 'INDUSTRY_ADMIN' || user?.role === 'company' ? [{ to: '/organizations', icon: <Building2 size={18} />, label: 'Organization & Members' }] : []),
   ]
   const academicianLinks = [
     { to: '/academician/opportunities', icon: <BookOpen size={18} />, label: 'Opportunities' },
   ]
   const institutionLinks = [
     { to: '/institution/stats', icon: <LayoutDashboard size={18} />, label: 'Internship Stats' },
+    { to: '/organizations', icon: <Building2 size={18} />, label: 'Organization & Members' },
   ]
+  const mentorLinks = [{ to: '/student/mentorship', icon: <Users size={18} />, label: 'Mentees' }]
   const roleDashboard = { to: '/dashboard', icon: <LayoutDashboard size={18} />, label: 'Dashboard' }
 
   const links = [roleDashboard, ...( 
     (user?.role === 'student' || user?.role === 'STUDENT') ? studentLinks :
     (user?.role === 'company' || user?.role === 'INDUSTRY_MEMBER_RECRUITER' || user?.role === 'INDUSTRY_ADMIN') ? companyLinks :
-    (user?.role === 'academician' || user?.role === 'FACULTY') ? academicianLinks :
-    (user?.role === 'institution' || user?.role === 'INSTITUTION_ADMIN') ? institutionLinks : [])]
+    (user?.role === 'academician' || user?.role === 'FACULTY') ? [...academicianLinks, ...institutionLinks] :
+    (user?.role === 'institution' || user?.role === 'INSTITUTION_ADMIN') ? institutionLinks :
+    user?.role === 'MENTOR_TRAINER' ? mentorLinks : [])]
 
   return (
     <aside className="w-64 bg-white border-r border-gray-200 flex flex-col min-h-screen">

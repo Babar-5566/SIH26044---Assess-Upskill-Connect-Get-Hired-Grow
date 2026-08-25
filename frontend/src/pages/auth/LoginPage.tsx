@@ -33,13 +33,13 @@ export default function LoginPage() {
         </div>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-            <input className="input" type="email" value={email}
+            <label htmlFor="login-email" className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+            <input id="login-email" className="input" type="email" value={email}
               onChange={e => setEmail(e.target.value)} required placeholder="student@demo.com" />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
-            <input className="input" type="password" value={password}
+            <label htmlFor="login-password" className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+            <input id="login-password" className="input" type="password" value={password}
               onChange={e => setPassword(e.target.value)} required placeholder="••••••••" />
           </div>
           {error && <p className="text-red-600 text-sm">{error}</p>}

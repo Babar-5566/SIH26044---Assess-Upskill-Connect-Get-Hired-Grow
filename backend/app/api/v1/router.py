@@ -3,7 +3,7 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
-from app.api.deps import get_current_user, require_roles
+from app.api.deps import bearer, get_current_user, require_roles
 from app.db.session import get_db
 from app.models import User, StudentSkill, StudentProject, StudentCertification, StudentAchievement, StudentInternship, StudentPreferredRole, StudentDocument, Skill, CareerRole, EmploymentOutcome, Recommendation
 from app.schemas.auth import RegisterStudent, Login
@@ -14,6 +14,7 @@ from app.ai.prompts import SYSTEM_PROMPT, recommendation_prompt
 from app.ai.base import ProviderError
 from app.core.response import success
 from app.core.config import settings
+from app.core.security import revoke_token
 from app.api.v1.endpoints.learning import router as learning_router
 from app.api.v1.endpoints.opportunities import router as opportunities_router
 from app.api.v1.endpoints.assessments import router as assessments_router
@@ -61,6 +62,9 @@ def login(data: Login, db: Session = Depends(get_db)):
     return success({"access_token": result[1], "token_type": "bearer"})
 @auth.get("/me")
 def me(user=Depends(get_current_user)): return success(public_user(user))
+@auth.post("/logout", status_code=204)
+def logout(credentials=Depends(bearer), user=Depends(get_current_user)):
+    revoke_token(credentials.credentials)
 router.include_router(auth)
 
 students = APIRouter(prefix="/students/me", tags=["students"])
@@ -192,10 +196,10 @@ def put_interests(data: CareerInterestIn, user=Depends(require_roles("STUDENT"))
 
 @students.post("/resume", status_code=201)
 def upload_resume(file: UploadFile = File(...), user=Depends(require_roles("STUDENT")), db=Depends(get_db)):
-    try: data, size, ext, safe_name = resume_service.read_resume(file)
+    try: data, size, ext, safe_name, mime_type = resume_service.read_resume(file)
     except ValueError as exc: raise HTTPException(400, str(exc))
     db.query(StudentDocument).filter_by(student_id=user.id, document_type="RESUME", is_active=True).update({"is_active": False})
-    row = StudentDocument(student_id=user.id, file_name=safe_name, file_data=data, file_size=size, mime_type=file.content_type)
+    row = StudentDocument(student_id=user.id, file_name=safe_name, file_data=data, file_size=size, mime_type=mime_type)
     db.add(row); user.profile.resume_file_url = f"/api/v1/students/me/resume/download"; db.commit(); db.refresh(row); return success(serialize(row))
 @students.get("/resume")
 def get_resume(user=Depends(require_roles("STUDENT")), db=Depends(get_db)):

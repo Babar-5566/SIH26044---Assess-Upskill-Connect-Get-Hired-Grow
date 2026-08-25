@@ -28,7 +28,18 @@ def add_member(organization_id: UUID, data: MembershipCreate, db: Session = Depe
     admin_role = "INSTITUTION_ADMIN" if org.organization_type == "INSTITUTION" else "INDUSTRY_ADMIN"
     admin = db.query(OrganizationMembership).filter_by(user_id=user.id, organization_id=organization_id, role=admin_role, status="ACTIVE").first()
     if not admin: raise HTTPException(403, "Organization administrator permission required")
-    if not db.get(User, data.user_id): raise HTTPException(404, "User not found")
+    target_user = db.get(User, data.user_id)
+    if not target_user or not target_user.is_active: raise HTTPException(404, "Active user not found")
+    allowed_roles = ({"STUDENT", "FACULTY", "INSTITUTION_ADMIN", "MENTOR_TRAINER"}
+                     if org.organization_type == "INSTITUTION"
+                     else {"INDUSTRY_MEMBER_RECRUITER", "INDUSTRY_ADMIN"})
+    if data.role not in allowed_roles:
+        raise HTTPException(422, "Role is not valid for this organization type")
+    duplicate = db.query(OrganizationMembership).filter_by(
+        user_id=data.user_id, organization_id=organization_id, role=data.role
+    ).first()
+    if duplicate:
+        raise HTTPException(409, "Membership already exists")
     row = OrganizationMembership(organization_id=organization_id, **data.model_dump()); db.add(row); db.commit(); db.refresh(row); return row
 
 @router.get("/{organization_id}/members", response_model=list[MembershipOut])

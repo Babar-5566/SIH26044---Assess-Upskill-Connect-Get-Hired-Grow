@@ -21,11 +21,18 @@ import PostInternship from './pages/internship/PostInternship'
 import ApplicantsList from './pages/internship/ApplicantsList'
 import AcademicianOpportunities from './pages/internship/AcademicianOpportunities'
 import RoleDashboard from './pages/dashboard/RoleDashboard'
+import AssessmentsPage from './pages/platform/AssessmentsPage'
+import InterviewsPage from './pages/platform/InterviewsPage'
+import MentorshipPage from './pages/platform/MentorshipPage'
+import OutcomesPage from './pages/platform/OutcomesPage'
+import JobsPage from './pages/platform/JobsPage'
+import OrganizationsPage from './pages/platform/OrganizationsPage'
 
-function RequireAuth({ children }: { children: React.ReactNode }) {
+function RequireAuth({ children, roles }: { children: React.ReactNode; roles?: string[] }) {
   const { user, isLoading } = useAuth()
   if (isLoading) return <div className="min-h-screen flex items-center justify-center text-gray-400">Loading…</div>
   if (!user) return <Navigate to="/login" replace />
+  if (roles && !roles.includes(String(user.role))) return <Navigate to="/dashboard" replace />
   return <AppLayout>{children}</AppLayout>
 }
 
@@ -67,26 +74,32 @@ export default function App() {
           <Route path="/register" element={<RegisterPage />} />
 
           {/* Student routes */}
-          <Route path="/student/learning" element={<RequireAuth><LearningDashboard /></RequireAuth>} />
-          <Route path="/student/learning/recommendations" element={<RequireAuth><RecommendationsPage /></RequireAuth>} />
-          <Route path="/student/certifications" element={<RequireAuth><CertificationsPage /></RequireAuth>} />
-          <Route path="/student/internships" element={<RequireAuth><InternshipDiscovery /></RequireAuth>} />
-          <Route path="/student/internships/:id" element={<RequireAuth><InternshipDetail /></RequireAuth>} />
-          <Route path="/student/internships/applications" element={<RequireAuth><MyApplications /></RequireAuth>} />
+          <Route path="/student/learning" element={<RequireAuth roles={['student','STUDENT']}><LearningDashboard /></RequireAuth>} />
+          <Route path="/student/learning/recommendations" element={<RequireAuth roles={['student','STUDENT']}><RecommendationsPage /></RequireAuth>} />
+          <Route path="/student/certifications" element={<RequireAuth roles={['student','STUDENT']}><CertificationsPage /></RequireAuth>} />
+          <Route path="/student/jobs" element={<RequireAuth roles={['student','STUDENT']}><JobsPage /></RequireAuth>} />
+          <Route path="/student/assessments" element={<RequireAuth roles={['student','STUDENT']}><AssessmentsPage /></RequireAuth>} />
+          <Route path="/student/interviews" element={<RequireAuth roles={['student','STUDENT']}><InterviewsPage /></RequireAuth>} />
+          <Route path="/student/mentorship" element={<RequireAuth roles={['student','STUDENT','MENTOR_TRAINER']}><MentorshipPage /></RequireAuth>} />
+          <Route path="/student/outcomes" element={<RequireAuth roles={['student','STUDENT']}><OutcomesPage /></RequireAuth>} />
+          <Route path="/student/internships" element={<RequireAuth roles={['student','STUDENT']}><InternshipDiscovery /></RequireAuth>} />
+          <Route path="/student/internships/:id" element={<RequireAuth roles={['student','STUDENT']}><InternshipDetail /></RequireAuth>} />
+          <Route path="/student/internships/applications" element={<RequireAuth roles={['student','STUDENT']}><MyApplications /></RequireAuth>} />
 
           {/* Company routes */}
-          <Route path="/company/internships" element={<RequireAuth><CompanyInternships /></RequireAuth>} />
-          <Route path="/company/internships/new" element={<RequireAuth><PostInternship /></RequireAuth>} />
-          <Route path="/company/internships/:postingId/applicants" element={<RequireAuth><ApplicantsList /></RequireAuth>} />
+          <Route path="/company/internships" element={<RequireAuth roles={['INDUSTRY_MEMBER_RECRUITER','INDUSTRY_ADMIN','company']}><CompanyInternships /></RequireAuth>} />
+          <Route path="/company/internships/new" element={<RequireAuth roles={['INDUSTRY_MEMBER_RECRUITER','INDUSTRY_ADMIN','company']}><PostInternship /></RequireAuth>} />
+          <Route path="/company/internships/:postingId/applicants" element={<RequireAuth roles={['INDUSTRY_MEMBER_RECRUITER','INDUSTRY_ADMIN','company']}><ApplicantsList /></RequireAuth>} />
 
           {/* Academician routes */}
-          <Route path="/academician/opportunities" element={<RequireAuth><AcademicianOpportunities /></RequireAuth>} />
+          <Route path="/academician/opportunities" element={<RequireAuth roles={['FACULTY','academician']}><AcademicianOpportunities /></RequireAuth>} />
 
           {/* Institution routes */}
-          <Route path="/institution/stats" element={<RequireAuth><InstitutionStats /></RequireAuth>} />
+          <Route path="/institution/stats" element={<RequireAuth roles={['INSTITUTION_ADMIN','FACULTY','institution']}><InstitutionStats /></RequireAuth>} />
           <Route path="/dashboard" element={<RequireAuth><RoleDashboard /></RequireAuth>} />
-          <Route path="/mentor/dashboard" element={<RequireAuth><RoleDashboard /></RequireAuth>} />
-          <Route path="/faculty/dashboard" element={<RequireAuth><RoleDashboard /></RequireAuth>} />
+          <Route path="/mentor/dashboard" element={<RequireAuth roles={['MENTOR_TRAINER']}><RoleDashboard /></RequireAuth>} />
+          <Route path="/faculty/dashboard" element={<RequireAuth roles={['FACULTY','INSTITUTION_ADMIN']}><RoleDashboard /></RequireAuth>} />
+          <Route path="/organizations" element={<RequireAuth roles={['INDUSTRY_ADMIN','INSTITUTION_ADMIN','FACULTY','company','institution']}><OrganizationsPage /></RequireAuth>} />
 
           {/* Fallback */}
           <Route path="*" element={<Navigate to="/login" replace />} />

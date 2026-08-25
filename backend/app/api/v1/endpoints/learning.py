@@ -28,7 +28,7 @@ def create_resource(
     current_user: User = Depends(require_role("admin")),
 ):
     """Add a new learning resource (admin only)."""
-    resource = LearningResource(**payload.model_dump())
+    resource = LearningResource(organization_id=getattr(current_user, "active_organization_id", None), **payload.model_dump())
     db.add(resource)
     db.commit()
     db.refresh(resource)
@@ -89,7 +89,7 @@ def create_plan(
     db: Session = Depends(get_db),
 ):
     """Create a new learning plan auto-populated from recommendations."""
-    return learning_service.create_or_replace_plan(current_user.id, payload, db)
+    return learning_service.create_or_replace_plan(current_user.id, payload, db, getattr(current_user, "active_organization_id", None))
 
 
 @router.get("/plans/me", response_model=Optional[LearningPlanOut])
@@ -117,7 +117,7 @@ def update_item(
     db: Session = Depends(get_db),
 ):
     """Update progress or status of a plan item."""
-    return learning_service.update_plan_item(item_id, payload, db)
+    return learning_service.update_plan_item(item_id, payload, db, current_user.id)
 
 
 @router.delete("/plans/me")

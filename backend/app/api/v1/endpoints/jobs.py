@@ -19,4 +19,4 @@ def apply(job_id: UUID, cover_letter: str|None=None, db: Session=Depends(get_db)
  job=db.get(InternshipPosting,job_id)
  if not job or job.type not in {"job","graduate_opportunity","full_time"}: raise HTTPException(404,"Job not found")
  if db.query(InternshipApplication).filter_by(internship_id=job_id,student_id=user.id).first(): raise HTTPException(409,"Already applied")
- row=InternshipApplication(internship_id=job_id,student_id=user.id,cover_letter=cover_letter); db.add(row); db.commit(); db.refresh(row); return row
+ row=InternshipApplication(internship_id=job_id, organization_id=job.organization_id, student_id=user.id,cover_letter=cover_letter); db.add(row); db.commit(); db.refresh(row); return row

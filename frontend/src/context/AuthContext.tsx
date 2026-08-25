@@ -29,6 +29,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (stored && storedToken) {
       setUser(JSON.parse(stored))
       setToken(storedToken)
+      organizationApi.list().then(({ data }) => {
+        setOrganizations(data || [])
+        if (!localStorage.getItem('organization_id') && data?.[0]) switchOrganization(data[0].id)
+      }).catch(() => setOrganizations([]))
     }
     setIsLoading(false)
   }, [])
