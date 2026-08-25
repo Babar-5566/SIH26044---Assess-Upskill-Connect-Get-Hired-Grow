@@ -18,36 +18,22 @@ from app.schemas.learning import (
 )
 
 
-# ─── Skill Gap Stub ──────────────────────────────────────────────────────────
-# In production this will call Phase 10 (Skill Intelligence) service.
-# Returns a prioritised list of {skill, priority} dicts.
-
-MOCK_SKILL_GAPS = {
-    "Java Backend Developer": [
-        {"skill": "Spring Boot", "priority": 1},
-        {"skill": "REST API", "priority": 2},
-        {"skill": "Docker", "priority": 3},
-    ],
-    "Data Analyst": [
-        {"skill": "Python", "priority": 1},
-        {"skill": "SQL", "priority": 2},
-        {"skill": "Power BI", "priority": 3},
-    ],
-    "Frontend Developer": [
-        {"skill": "React", "priority": 1},
-        {"skill": "TypeScript", "priority": 2},
-        {"skill": "CSS", "priority": 3},
-    ],
-}
-
 def get_skill_gaps(student_id: UUID, target_role: str, db: Session) -> List[dict]:
-    from app.models import CareerRole, StudentSkill
+    from app.models import CareerRole, StudentSkill, InternshipPosting
     role = db.query(CareerRole).filter(CareerRole.name.ilike(target_role)).first()
     required = []
     if role and getattr(role, "required_skills", None):
         required = role.required_skills
     if not required:
-        required = [x["skill"] for x in MOCK_SKILL_GAPS.get(target_role, [{"skill": target_role + " fundamentals", "priority": 1}])]
+        # Derive requirements from persisted opportunity data for this role.
+        required = []
+        postings = db.query(InternshipPosting).filter(InternshipPosting.status == "open").all()
+        role_tokens = {token for token in target_role.lower().split() if len(token) > 2}
+        for posting in postings:
+            if role_tokens and not role_tokens.intersection(set((posting.title or "").lower().split())):
+                continue
+            required.extend(posting.required_skills or [])
+        required = list(dict.fromkeys(required))
     owned = {row.skill.name.lower() for row in db.query(StudentSkill).filter_by(student_id=student_id).all() if row.skill}
     return [{"skill": skill, "priority": index, "status": "MET" if skill.lower() in owned else "MISSING"} for index, skill in enumerate(required, 1)]
 
@@ -88,7 +74,7 @@ def get_recommendations(student_id: UUID, target_role: str, db: Session) -> Reco
 
 # ─── Learning Plan ───────────────────────────────────────────────────────────
 
-def create_or_replace_plan(student_id: UUID, payload: LearningPlanCreate, db: Session) -> StudentLearningPlan:
+def create_or_replace_plan(student_id: UUID, payload: LearningPlanCreate, db: Session, organization_id: UUID | None = None) -> StudentLearningPlan:
     """Creates a new plan (abandons any existing active plan for same role)."""
     existing = (
         db.query(StudentLearningPlan)
@@ -100,7 +86,7 @@ def create_or_replace_plan(student_id: UUID, payload: LearningPlanCreate, db: Se
     if existing:
         existing.status = "abandoned"
 
-    plan = StudentLearningPlan(student_id=student_id, target_role=payload.target_role)
+    plan = StudentLearningPlan(student_id=student_id, target_role=payload.target_role, organization_id=organization_id)
     db.add(plan)
     db.flush()
 
@@ -139,8 +125,11 @@ def get_plan_with_items(student_id: UUID, db: Session) -> Optional[StudentLearni
     return plan
 
 
-def update_plan_item(item_id: UUID, payload: UpdatePlanItemRequest, db: Session) -> LearningPlanItem:
-    item = db.query(LearningPlanItem).filter(LearningPlanItem.id == item_id).first()
+def update_plan_item(item_id: UUID, payload: UpdatePlanItemRequest, db: Session, student_id: UUID | None = None) -> LearningPlanItem:
+    query = db.query(LearningPlanItem).filter(LearningPlanItem.id == item_id)
+    if student_id is not None:
+        query = query.join(StudentLearningPlan, LearningPlanItem.plan_id == StudentLearningPlan.id).filter(StudentLearningPlan.student_id == student_id)
+    item = query.first()
     if not item:
         raise HTTPException(status_code=404, detail="Plan item not found")
     if payload.status:

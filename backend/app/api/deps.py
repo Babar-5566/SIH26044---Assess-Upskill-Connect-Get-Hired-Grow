@@ -30,7 +30,8 @@ def require_role(role):
   "industry":("INDUSTRY_MEMBER_RECRUITER","INDUSTRY_ADMIN"),
   "institution":("INSTITUTION_ADMIN","FACULTY"),
   "academician":("FACULTY",),
-  "admin":("ADMIN","INSTITUTION_ADMIN","INDUSTRY_ADMIN"),
+  # Platform administration is intentionally distinct from tenant admins.
+  "admin":("ADMIN",),
   "faculty":("FACULTY","INSTITUTION_ADMIN"),
  }
  allowed=aliases.get(role.lower(),(role.upper(),))

@@ -5,8 +5,11 @@ from sqlalchemy.exc import IntegrityError
 from app.api.v1.router import router
 from app.core.config import settings
 from app.core.exceptions import validation_handler, integrity_handler, generic_handler, error_response
+from app.core.middleware import AuditMiddleware, RateLimitMiddleware
 app = FastAPI(title="SkillBridge AI", debug=settings.debug)
 app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origins, allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
+app.add_middleware(AuditMiddleware)
+app.add_middleware(RateLimitMiddleware)
 app.include_router(router, prefix="/api/v1")
 app.add_exception_handler(RequestValidationError, validation_handler)
 app.add_exception_handler(IntegrityError, integrity_handler)

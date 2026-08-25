@@ -9,6 +9,7 @@ class EmploymentOutcome(Base):
     __table_args__ = (CheckConstraint("status IN ('SEEKING','EMPLOYED','LEFT_JOB','NOT_LOOKING')"),)
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     student_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    organization_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("organizations.id", ondelete="SET NULL"), index=True)
     status: Mapped[str] = mapped_column(String(20), default="SEEKING")
     company_name: Mapped[str | None] = mapped_column(String(200))
     job_title: Mapped[str | None] = mapped_column(String(200))

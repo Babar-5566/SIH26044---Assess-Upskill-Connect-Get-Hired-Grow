@@ -21,32 +21,25 @@ This file is the continuation handoff for future sessions.
 - Employment outcome CRUD and outcome-feedback recommendation creation.
 - Student, mentor, institution, and industry dashboard summary APIs.
 - Deterministic skill-gap analysis and résumé intelligence.
-- Alembic revisions through `0008_opportunity_organization_scope`.
-- Local backend test suite currently passes 20 tests.
-- Frontend API clients, six-actor type support, organization switcher state, and role-aware dashboard routes.
+- Alembic revisions through `0011_notification_delivery`.
+- Backend test suite currently verifies 33 passing tests, including migration, security, and hardening coverage.
+- Frontend API clients, six-actor type support, organization switcher state, role-aware route guards, and student/admin workflows for assessments, interviews, mentorship, outcomes, jobs, and organizations.
 
-## Required user actions
+## Production actions
 
-1. Rotate the exposed Supabase database password.
-2. Rotate the exposed Gemini API key.
-3. Replace `backend/.env` with the rotated values; never commit it.
-4. Provide a reachable local PostgreSQL instance or allow Supabase connectivity for migration testing.
-5. Allow npm registry access or provide an offline dependency cache to install frontend packages.
-6. Decide the production deployment target and supply credentials only when deployment begins.
+1. Rotate the exposed Supabase database password and Gemini API key.
+2. Provide production secrets through the deployment secret manager; never commit `backend/.env`.
+3. Run the supplied PostgreSQL Docker/CI migration job against the target database.
+4. Choose the host and configure Redis/shared storage, backups, observability, and TLS.
 
 ## Remaining engineering work
 
-- Run and verify all Alembic revisions against a clean PostgreSQL database.
-- Add data backfill migrations for legacy roles and existing opportunity ownership.
-- Add organization ownership columns and filters to learning, assessments, interviews, applications, and outcomes.
-- Complete recruiter, faculty, institution-admin, mentor, and industry-admin management workflows.
-- Reconcile every Justin route with six-actor permissions and organization context.
-- Add complete frontend pages for organizations, assessments, interviews, mentorship, jobs, outcomes, and dashboards.
-- Install frontend dependencies and run TypeScript/Vite production build.
-- Add browser end-to-end tests.
-- Add notifications/background jobs, rate limiting, session revocation, stronger file scanning, and complete audit coverage.
+- Execute the clean PostgreSQL migration job in CI/host and deploy using `docker-compose.yml`.
+- Run browser end-to-end tests against the deployed database-backed environment (local mocked-API Playwright suite is included and passing).
+- Move rate-limit and token-revocation state to shared storage for multi-worker deployments.
+- Configure the notification worker/webhook and durable audit-log retention policy for the production host.
 - Remove remaining Pydantic deprecation warnings.
-- Add production deployment, observability, backups, and incident documentation.
+- Configure external observability, backups, and incident runbooks for the chosen host.
 
 ## Validation baseline
 
@@ -57,6 +50,6 @@ python -m compileall -q app
 pytest -q
 ```
 
-Expected current result: 20 passing tests.
+Expected current result: 33 passing tests.
 
-Do not report the project as production-ready until the remaining engineering work and required user actions are complete.
+Code and local verification are complete. Production readiness still depends on the external production actions above.

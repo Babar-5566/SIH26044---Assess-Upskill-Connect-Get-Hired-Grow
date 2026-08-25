@@ -12,6 +12,12 @@ class Settings(BaseSettings):
     cors_origins: list[str] = ["http://localhost:5173", "http://localhost:3000"]
     upload_dir: str = "storage"
     max_resume_size_mb: int = 5
+    rate_limit_enabled: bool = True
+    rate_limit_requests: int = 120
+    rate_limit_window_seconds: int = 60
+    auth_rate_limit_requests: int = 10
+    notification_webhook_url: str | None = None
+    audit_persist_enabled: bool = False
     ai_provider: str = "gemini"
     gemini_api_key: SecretStr | None = None
     gemini_model: str = "gemini-2.5-flash"

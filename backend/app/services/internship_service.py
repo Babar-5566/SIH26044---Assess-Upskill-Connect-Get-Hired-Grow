@@ -20,30 +20,14 @@ from app.schemas.opportunities import (
 )
 
 
-# ─── MOCK Student Profile ─────────────────────────────────────────────────────
-# Replace with Phase 9 student profile service call in production.
-
-MOCK_STUDENT_PROFILES = {
-    # student_id (str) → profile dict
-}
-
-def get_student_profile_mock(student_id: UUID) -> dict:
-    return MOCK_STUDENT_PROFILES.get(str(student_id), {
-        "cgpa": 7.5,
-        "year": 3,
-        "degree": "B.Tech",
-        "skills": ["Java", "SQL", "Python"],
-        "certifications": [],
-    })
-
 def get_student_profile(student_id: UUID, db: Session) -> dict:
     from app.models import User, StudentSkill, StudentCertification
     user = db.get(User, student_id)
     profile = user.profile if user else None
     skills = [row.skill.name for row in db.query(StudentSkill).filter_by(student_id=student_id).all() if row.skill]
     certs = [row.name for row in db.query(StudentCertification).filter_by(student_id=student_id).all()]
-    if not profile:
-        return get_student_profile_mock(student_id)
+    if not user or not profile:
+        return {"cgpa": 0.0, "year": None, "degree": "", "skills": skills, "certifications": certs}
     year = None
     if profile.graduation_year:
         from datetime import date

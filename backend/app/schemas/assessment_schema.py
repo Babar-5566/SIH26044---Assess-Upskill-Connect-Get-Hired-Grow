@@ -50,10 +50,10 @@ class SaveResponseRequest(BaseModel):
     selected_options: Optional[List[str]] = None
     submitted_code: Optional[str] = None
     programming_language: Optional[str] = None
-    time_spent_seconds: int = 0
+    time_spent_seconds: int = Field(default=0, ge=0, le=86400)
 
 class SubmitAssessmentRequest(BaseModel):
-    tab_switches_count: int = 0
+    tab_switches_count: int = Field(default=0, ge=0, le=100000)
 
 class AssessmentResultResponse(BaseModel):
     attempt_id: UUID

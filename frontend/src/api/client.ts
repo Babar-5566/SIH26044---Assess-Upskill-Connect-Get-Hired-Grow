@@ -109,3 +109,20 @@ export const notificationApi = {
   markRead: (id: string) => api.post(`/notifications/${id}/read`),
   markAllRead: () => api.post('/notifications/read-all'),
 }
+
+export const jobsApi = {
+  list: () => api.get('/jobs'),
+  detail: (id: string) => api.get(`/jobs/${id}`),
+  apply: (id: string, cover_letter?: string) => api.post(`/jobs/${id}/apply`, null, { params: cover_letter ? { cover_letter } : {} }),
+}
+
+export const mentorshipApi = {
+  list: () => api.get('/mentorship/assignments'),
+  updateStatus: (id: string, status: string) => api.patch(`/mentorship/assignments/${id}/status`, null, { params: { status } }),
+}
+
+export const outcomesApi = {
+  list: () => api.get('/outcomes/me'),
+  create: (data: Record<string, unknown>) => api.post('/outcomes/me', data),
+  update: (id: string, data: Record<string, unknown>) => api.patch(`/outcomes/me/${id}`, data),
+}

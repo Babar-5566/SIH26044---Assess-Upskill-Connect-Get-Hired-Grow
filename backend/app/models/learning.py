@@ -1,5 +1,5 @@
 ﻿import uuid
-from sqlalchemy import Column, String, Float, Integer, Boolean, DateTime, ARRAY, Text
+from sqlalchemy import Column, String, Float, Integer, Boolean, DateTime, ARRAY, Text, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
 from app.db.base import Base
@@ -9,6 +9,7 @@ class LearningResource(Base):
     __tablename__ = "learning_resources"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    organization_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="SET NULL"), index=True)
     title = Column(String, nullable=False)
     type = Column(String, nullable=False)            # course|workshop|fdp|certification|mentorship|project
     provider = Column(String)                        # Coursera, NPTEL, internal, industry_partner
@@ -32,6 +33,7 @@ class StudentLearningPlan(Base):
     __tablename__ = "student_learning_plans"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    organization_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="SET NULL"), index=True)
     student_id = Column(UUID(as_uuid=True), nullable=False, index=True)
     target_role = Column(String, nullable=False)
     status = Column(String, default="active")        # active|completed|abandoned

@@ -1,0 +1,50 @@
+name: SkillBridge CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: skillbridge_test
+          POSTGRES_USER: skillbridge
+          POSTGRES_PASSWORD: skillbridge
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd="pg_isready -U skillbridge -d skillbridge_test"
+          --health-interval=10s --health-timeout=5s --health-retries=5
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      DATABASE_URL: postgresql+psycopg://skillbridge:skillbridge@localhost:5432/skillbridge_test
+      SECRET_KEY: ci-only-secret
+      DEBUG: "false"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - run: pip install -r requirements.txt
+      - run: alembic upgrade head
+      - run: python -m compileall -q app
+      - run: pytest -q
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '22', cache: npm, cache-dependency-path: frontend/package-lock.json}
+      - run: npm ci
+      - run: npm audit --audit-level=high
+      - run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e

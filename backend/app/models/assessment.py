@@ -13,6 +13,7 @@ class Assessment(Base):
     __tablename__ = "assessments"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    organization_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="SET NULL"), index=True)
     title = Column(String(255), nullable=False)
     description = Column(Text)
     category = Column(ENUM(AssessmentType, name="assessment_type"), nullable=False)

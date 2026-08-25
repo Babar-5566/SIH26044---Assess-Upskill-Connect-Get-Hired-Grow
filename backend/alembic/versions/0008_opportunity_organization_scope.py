@@ -2,7 +2,7 @@
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
-revision="0008_opportunity_organization_scope"; down_revision="0007_feature_tables"; branch_labels=None; depends_on=None
+revision="0008_opportunity_org_scope"; down_revision="0007_feature_tables"; branch_labels=None; depends_on=None
 def upgrade():
  bind=op.get_bind(); inspector=sa.inspect(bind)
  for table in ("internship_postings","academician_opportunities"):

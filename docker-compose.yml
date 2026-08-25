@@ -1,0 +1,27 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: skillbridge
+      POSTGRES_USER: skillbridge
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+    volumes: [skillbridge-db:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U skillbridge -d skillbridge"]
+  backend:
+    build: ./backend
+    environment:
+      DATABASE_URL: postgresql+psycopg://skillbridge:${POSTGRES_PASSWORD}@postgres:5432/skillbridge
+      SECRET_KEY: ${SECRET_KEY:?set SECRET_KEY}
+      DEBUG: "false"
+      AUDIT_PERSIST_ENABLED: "true"
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost}
+    depends_on:
+      postgres: {condition: service_healthy}
+    ports: ["8000:8000"]
+  frontend:
+    build: ./frontend
+    depends_on: [backend]
+    ports: ["80:80"]
+volumes:
+  skillbridge-db:

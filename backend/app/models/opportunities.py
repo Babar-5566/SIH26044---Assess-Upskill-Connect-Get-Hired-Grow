@@ -1,5 +1,5 @@
 ﻿import uuid
-from sqlalchemy import Column, String, Float, Integer, Boolean, DateTime, ARRAY, Text, Date, JSON
+from sqlalchemy import Column, String, Float, Integer, Boolean, DateTime, ARRAY, Text, Date, JSON, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
 from app.db.base import Base
@@ -57,6 +57,7 @@ class InternshipApplication(Base):
     __tablename__ = "internship_applications"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    organization_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="SET NULL"), index=True)
     student_id = Column(UUID(as_uuid=True), nullable=False, index=True)
     internship_id = Column(UUID(as_uuid=True), nullable=False, index=True)
     # applied→shortlisted→assessment→interview→selected→rejected→withdrawn

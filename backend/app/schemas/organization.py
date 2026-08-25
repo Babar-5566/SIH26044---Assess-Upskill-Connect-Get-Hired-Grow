@@ -1,10 +1,10 @@
 from uuid import UUID
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 class OrganizationCreate(BaseModel):
-    name: str
+    name: str = Field(min_length=2, max_length=255)
     organization_type: str
-    slug: str
+    slug: str = Field(pattern=r"^[a-z0-9]+(?:-[a-z0-9]+)*$", min_length=2, max_length=255)
 
 class OrganizationOut(OrganizationCreate):
     id: UUID

@@ -772,3 +772,57 @@ EMPLOYMENT
 TAGLINE:
 
 “Assess. Upskill. Connect. Get Hired. Grow.”
+
+============================================================
+BACKEND MVP: PHASE 8 AND PHASE 9
+============================================================
+
+This repository also contains the SkillBridge AI backend MVP under `app/`.
+
+Implemented backend scope:
+
+• FastAPI with `/api/v1` routes
+• PostgreSQL 16 with synchronous SQLAlchemy 2.x
+• Alembic migrations
+• Pydantic v2 schemas
+• JWT bearer authentication and bcrypt password hashing
+• Student profiles, skills, projects, certifications, achievements, internships
+• Career interests, resumes, metadata, admin student views
+• Docker Compose, seed script, and pytest test suite
+
+The backend intentionally excludes AI recommendations, resume parsing, skill-gap analysis, employability prediction, matching engines, interviews, placement prediction, and analytics dashboards.
+
+BACKEND LOCAL SETUP
+-------------------
+
+1. Create and activate a virtual environment.
+2. Install dependencies with `python -m pip install -r requirements.txt`.
+3. Copy `.env.example` to `.env`.
+4. Start PostgreSQL 16 locally or connect to a managed PostgreSQL instance.
+5. Apply migrations with `alembic upgrade head`.
+6. Seed demo data with `python -m app.scripts.seed`.
+7. Start the API with `uvicorn app.main:app --reload`.
+
+Backend URLs:
+
+• API: `http://127.0.0.1:8000/api/v1`
+• Swagger: `http://127.0.0.1:8000/docs`
+• Health: `http://127.0.0.1:8000/api/v1/health`
+
+Demo accounts:
+
+• Admin: `admin@example.com` / `Admin@123`
+• Student: `student@example.com` / `Student@123`
+
+MIGRATIONS AND TESTS
+--------------------
+
+Generate migrations with `alembic revision --autogenerate -m "phase 8 and phase 9 tables"` and apply with `alembic upgrade head`.
+
+Create the test database with:
+
+Create a separate PostgreSQL database named `skillbridge_test` using pgAdmin or `psql`.
+
+Run tests with `pytest -q`.
+
+For backend details, see `.env.example`, `requirements.txt`, `alembic/`, `app/`, `docs/phase_21_23_architecture.md`, and `tests/`.
