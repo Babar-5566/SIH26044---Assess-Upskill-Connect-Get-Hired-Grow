@@ -3,7 +3,7 @@ from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
-revision = "0010_organization_scope_and_backfill"
+revision = "0010_org_scope_backfill"
 down_revision = "0009_notifications"
 branch_labels = None
 depends_on = None

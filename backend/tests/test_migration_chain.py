@@ -20,10 +20,11 @@ def test_alembic_revision_chain_is_linear_and_reaches_0010():
         revision = _literal_assignment(path, "revision")
         revisions[revision] = _literal_assignment(path, "down_revision")
 
-    assert revisions["0010_organization_scope_and_backfill"] == "0009_notifications"
-    assert revisions["0011_notification_delivery"] == "0010_organization_scope_and_backfill"
+    assert revisions["0010_org_scope_backfill"] == "0009_notifications"
+    assert revisions["0011_notification_delivery"] == "0010_org_scope_backfill"
     heads = set(revisions) - {parent for parent in revisions.values() if parent}
     assert heads == {"0011_notification_delivery"}
+    assert max(map(len, revisions)) <= 32
 
 
 def test_remaining_domain_tables_have_organization_scope():
