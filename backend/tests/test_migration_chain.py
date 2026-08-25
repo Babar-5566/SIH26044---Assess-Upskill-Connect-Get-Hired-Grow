@@ -41,3 +41,10 @@ def test_remaining_domain_tables_have_organization_scope():
 def test_notifications_have_delivery_state():
     columns = Base.metadata.tables["notifications"].columns
     assert {"delivery_status", "delivery_attempts", "delivered_at", "last_delivery_error"}.issubset(set(columns.keys()))
+
+
+def test_initial_revision_does_not_create_later_feature_tables():
+    initial = Path(__file__).parents[1] / "alembic" / "versions" / "0001_initial.py"
+    source = initial.read_text(encoding="utf-8")
+    assert '"organizations"' not in source.split("initial_tables =", 1)[1].split("}", 1)[0]
+    assert '"assessments"' not in source.split("initial_tables =", 1)[1].split("}", 1)[0]
