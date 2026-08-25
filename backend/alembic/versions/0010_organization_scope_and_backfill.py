@@ -30,7 +30,18 @@ def upgrade():
         op.execute("UPDATE users SET role='FACULTY' WHERE role='ACADEMICIAN'")
         for table in ("internship_postings", "academician_opportunities"):
             if table in tables:
-                op.execute(sa.text(f"""UPDATE {table} AS opportunity SET organization_id = membership.organization_id FROM LATERAL (SELECT organization_id FROM organization_memberships WHERE user_id = opportunity.company_id AND status = 'ACTIVE' ORDER BY is_primary DESC, created_at ASC LIMIT 1) AS membership WHERE opportunity.organization_id IS NULL"""))
+                op.execute(sa.text(f"""
+                    UPDATE {table} AS opportunity
+                    SET organization_id = (
+                        SELECT membership.organization_id
+                        FROM organization_memberships AS membership
+                        WHERE membership.user_id = opportunity.company_id
+                          AND membership.status = 'ACTIVE'
+                        ORDER BY membership.is_primary DESC, membership.created_at ASC
+                        LIMIT 1
+                    )
+                    WHERE opportunity.organization_id IS NULL
+                """))
         if "internship_applications" in tables:
             op.execute("""UPDATE internship_applications AS application SET organization_id = posting.organization_id FROM internship_postings AS posting WHERE application.internship_id = posting.id AND application.organization_id IS NULL""")
 

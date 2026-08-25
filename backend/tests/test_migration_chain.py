@@ -49,3 +49,10 @@ def test_initial_revision_does_not_create_later_feature_tables():
     source = initial.read_text(encoding="utf-8")
     assert '"organizations"' not in source.split("initial_tables =", 1)[1].split("}", 1)[0]
     assert '"assessments"' not in source.split("initial_tables =", 1)[1].split("}", 1)[0]
+
+
+def test_organization_backfill_uses_valid_correlated_update():
+    migration = Path(__file__).parents[1] / "alembic" / "versions" / "0010_organization_scope_and_backfill.py"
+    source = migration.read_text(encoding="utf-8")
+    assert "FROM LATERAL" not in source
+    assert "membership.user_id = opportunity.company_id" in source
