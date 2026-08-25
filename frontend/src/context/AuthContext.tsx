@@ -6,7 +6,7 @@ interface AuthContextValue {
   user: User | null
   token: string | null
   login: (email: string, password: string) => Promise<void>
-  register: (data: { email: string; password: string; full_name: string; role: string }) => Promise<void>
+  register: (data: { email: string; password: string; first_name: string; last_name: string }) => Promise<void>
   logout: () => void
   isLoading: boolean
   organizations: any[]
@@ -54,7 +54,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch { setOrganizations([]) }
   }
 
-  const register = async (form: { email: string; password: string; full_name: string; role: string }) => {
+  const register = async (form: { email: string; password: string; first_name: string; last_name: string }) => {
     await authApi.register(form)
     await login(form.email, form.password)
   }

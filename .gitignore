@@ -6,5 +6,7 @@ storage/*
 !storage/.gitkeep
 frontend/node_modules/
 frontend/dist/
+frontend/.env
 frontend/test-results/
 frontend/playwright-report/
+.venv

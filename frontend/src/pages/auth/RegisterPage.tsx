@@ -2,17 +2,10 @@ import React, { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 
-const ROLES = [
-  { value: 'student', label: 'Student' },
-  { value: 'company', label: 'Company / Industry' },
-  { value: 'institution', label: 'Institution' },
-  { value: 'academician', label: 'Academician / Faculty' },
-]
-
 export default function RegisterPage() {
   const { register } = useAuth()
   const navigate = useNavigate()
-  const [form, setForm] = useState({ email: '', password: '', full_name: '', role: 'student' })
+  const [form, setForm] = useState({ email: '', password: '', first_name: '', last_name: '' })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
@@ -36,9 +29,14 @@ export default function RegisterPage() {
         <h2 className="text-2xl font-bold text-gray-900 mb-6">Create Account</h2>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
-            <input className="input" value={form.full_name}
-              onChange={e => setForm(f => ({ ...f, full_name: e.target.value }))} required />
+            <label className="block text-sm font-medium text-gray-700 mb-1">First Name</label>
+            <input className="input" value={form.first_name}
+              onChange={e => setForm(f => ({ ...f, first_name: e.target.value }))} required />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Last Name</label>
+            <input className="input" value={form.last_name}
+              onChange={e => setForm(f => ({ ...f, last_name: e.target.value }))} required />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
@@ -49,13 +47,6 @@ export default function RegisterPage() {
             <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
             <input className="input" type="password" value={form.password}
               onChange={e => setForm(f => ({ ...f, password: e.target.value }))} required />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
-            <select className="input" value={form.role}
-              onChange={e => setForm(f => ({ ...f, role: e.target.value }))}>
-              {ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
-            </select>
           </div>
           {error && <p className="text-red-600 text-sm">{error}</p>}
           <button type="submit" className="btn-primary w-full" disabled={loading}>
