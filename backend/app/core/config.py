@@ -25,7 +25,7 @@ class Settings(BaseSettings):
     openrouter_model: str = "openai/gpt-4o-mini"
     ai_timeout_seconds: float = 20.0
     ai_max_retries: int = 2
-    model_config = SettingsConfigDict(env_file=(Path(__file__).resolve().parents[2] / ".env", ".env"), extra="ignore")
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
     @field_validator("debug", mode="before")
     @classmethod
     def parse_debug(cls, value):

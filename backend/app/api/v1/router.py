@@ -58,7 +58,13 @@ def sqlalchemy_payload(value):
     return value
 
 def public_user(user: User) -> dict:
-    return {"id": str(user.id), "email": user.email, "role": user.role, "is_active": user.is_active}
+    # `role` is the persisted platform role. `effective_role` is resolved from
+    # the active X-Organization-ID context and is intentionally separate.
+    payload = {"id": str(user.id), "email": user.email, "role": user.role, "is_active": user.is_active,
+               "effective_role": getattr(user, "effective_role", user.role)}
+    if getattr(user, "active_organization_id", None):
+        payload["active_organization_id"] = str(user.active_organization_id)
+    return payload
 
 @router.get("/health")
 def health(): return success({"status": "ok"})
