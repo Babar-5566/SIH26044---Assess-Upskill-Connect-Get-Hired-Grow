@@ -3,12 +3,12 @@ import { dashboardApi } from '../../api/client'
 import { useAuth } from '../../context/AuthContext'
 
 export default function RoleDashboard() {
-  const { user, activeOrganizationId } = useAuth()
+  const { effectiveRole, activeOrganizationId } = useAuth()
   const [data, setData] = React.useState<Record<string, unknown> | null>(null)
   const [error, setError] = React.useState<string | null>(null)
 
   React.useEffect(() => {
-    const role = user?.role
+    const role = effectiveRole
     if ((role === 'INSTITUTION_ADMIN' || role === 'FACULTY' || role === 'institution') && !activeOrganizationId) {
       setError('Select or create an organization to view this dashboard')
       return
@@ -22,7 +22,7 @@ export default function RoleDashboard() {
         ? dashboardApi.industry()
         : dashboardApi.student()
     request.then((response) => setData(response.data)).catch(() => setError('Unable to load dashboard data'))
-  }, [user?.role, activeOrganizationId])
+  }, [effectiveRole, activeOrganizationId])
 
   if (error) return <div className="text-red-600">{error}</div>
   if (!data) return <div className="text-gray-500">Loading dashboard…</div>

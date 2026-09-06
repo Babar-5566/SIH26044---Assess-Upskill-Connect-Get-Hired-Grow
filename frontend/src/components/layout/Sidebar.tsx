@@ -4,7 +4,7 @@ import { useAuth } from '../../context/AuthContext'
 import { BookOpen, Briefcase, GraduationCap, LogOut, LayoutDashboard, Building2, Users } from 'lucide-react'
 
 export default function Sidebar() {
-  const { user, logout } = useAuth()
+  const { user, effectiveRole, activeOrganizationRole, logout } = useAuth()
   const navigate = useNavigate()
 
   const handleLogout = () => { logout(); navigate('/login') }
@@ -24,7 +24,7 @@ export default function Sidebar() {
     { to: '/company/internships', icon: <Briefcase size={18} />, label: 'My Postings' },
     { to: '/company/internships/new', icon: <LayoutDashboard size={18} />, label: 'Post Internship' },
     { to: '/company/opportunities/new', icon: <GraduationCap size={18} />, label: 'Post FDP / Opportunity' },
-    ...(user?.role === 'INDUSTRY_ADMIN' || user?.role === 'company' ? [{ to: '/organizations', icon: <Building2 size={18} />, label: 'Organization & Members' }] : []),
+    ...(effectiveRole === 'INDUSTRY_ADMIN' || effectiveRole === 'company' ? [{ to: '/organizations', icon: <Building2 size={18} />, label: 'Organization & Members' }] : []),
   ]
   const academicianLinks = [
     { to: '/academician/opportunities', icon: <BookOpen size={18} />, label: 'Opportunities' },
@@ -37,11 +37,11 @@ export default function Sidebar() {
   const roleDashboard = { to: '/dashboard', icon: <LayoutDashboard size={18} />, label: 'Dashboard' }
 
   const links = [roleDashboard, ...( 
-    (user?.role === 'student' || user?.role === 'STUDENT') ? studentLinks :
-    (user?.role === 'company' || user?.role === 'INDUSTRY_MEMBER_RECRUITER' || user?.role === 'INDUSTRY_ADMIN') ? companyLinks :
-    (user?.role === 'academician' || user?.role === 'FACULTY') ? [...academicianLinks, ...institutionLinks] :
-    (user?.role === 'institution' || user?.role === 'INSTITUTION_ADMIN') ? institutionLinks :
-    user?.role === 'MENTOR_TRAINER' ? mentorLinks : [])]
+    (effectiveRole === 'student' || effectiveRole === 'STUDENT') ? studentLinks :
+    (effectiveRole === 'company' || effectiveRole === 'INDUSTRY_MEMBER_RECRUITER' || effectiveRole === 'INDUSTRY_ADMIN') ? companyLinks :
+    (effectiveRole === 'academician' || effectiveRole === 'FACULTY') ? [...academicianLinks, ...institutionLinks] :
+    (effectiveRole === 'institution' || effectiveRole === 'INSTITUTION_ADMIN') ? institutionLinks :
+    effectiveRole === 'MENTOR_TRAINER' ? mentorLinks : [])]
 
   return (
     <aside className="w-64 bg-white border-r border-gray-200 flex flex-col min-h-screen">
@@ -51,7 +51,8 @@ export default function Sidebar() {
       </div>
       <div className="p-4 border-b border-gray-100">
         <p className="text-sm font-medium text-gray-800">{user?.full_name}</p>
-        <span className="badge bg-blue-100 text-blue-700 mt-1">{user?.role}</span>
+        <span className="badge bg-blue-100 text-blue-700 mt-1">{effectiveRole}</span>
+        {activeOrganizationRole && <p className="text-xs text-gray-400 mt-1">Organization role</p>}
       </div>
       <nav className="flex-1 p-4 space-y-1">
         {links.map((l) => (

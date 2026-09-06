@@ -19,7 +19,17 @@ def create_organization(data: OrganizationCreate, db: Session = Depends(get_db),
 
 @router.get("", response_model=list[OrganizationOut])
 def my_organizations(db: Session = Depends(get_db), user=Depends(get_current_user)):
-    return [m.organization for m in db.query(OrganizationMembership).filter_by(user_id=user.id, status="ACTIVE").all()]
+    memberships = db.query(OrganizationMembership).filter_by(user_id=user.id, status="ACTIVE").all()
+    # Include the membership role so clients can select an organization and
+    # send X-Organization-ID without conflating it with users.role.
+    return [{
+        "id": m.organization.id,
+        "name": m.organization.name,
+        "organization_type": m.organization.organization_type,
+        "slug": m.organization.slug,
+        "is_active": m.organization.is_active,
+        "role": m.role,
+    } for m in memberships]
 
 @router.post("/{organization_id}/members", response_model=MembershipOut, status_code=201)
 def add_member(organization_id: UUID, data: MembershipCreate, db: Session = Depends(get_db), user=Depends(get_current_user)):

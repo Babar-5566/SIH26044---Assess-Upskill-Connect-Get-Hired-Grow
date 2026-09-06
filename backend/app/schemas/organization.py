@@ -9,6 +9,9 @@ class OrganizationCreate(BaseModel):
 class OrganizationOut(OrganizationCreate):
     id: UUID
     is_active: bool
+    # Role is populated when this model is returned in the current user's
+    # organization list. It remains optional for backwards compatibility.
+    role: str | None = None
     model_config = ConfigDict(from_attributes=True)
 
 class MembershipCreate(BaseModel):
