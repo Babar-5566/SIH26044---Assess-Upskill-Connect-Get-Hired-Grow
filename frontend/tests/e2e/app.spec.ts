@@ -13,7 +13,7 @@ test('student can login and access job workflow', async ({ page }) => {
   await page.route('**/api/v1/jobs**', route => route.fulfill({ json: [{ id: 'job-1', title: 'Junior Engineer', company_name: 'Acme', location: 'Remote' }] }))
   await page.goto('/login')
   await page.getByLabel(/email/i).fill('student@example.com')
-  await page.getByLabel(/password/i).fill('StrongPass123')
+  await page.locator('#login-password').fill('StrongPass123')
   await page.getByRole('button', { name: /sign in/i }).click()
   await expect(page).toHaveURL(/\/student\/learning$/)
   await page.goto('/student/jobs')
