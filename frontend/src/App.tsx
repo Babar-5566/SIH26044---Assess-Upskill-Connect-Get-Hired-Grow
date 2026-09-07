@@ -27,12 +27,13 @@ import MentorshipPage from './pages/platform/MentorshipPage'
 import OutcomesPage from './pages/platform/OutcomesPage'
 import JobsPage from './pages/platform/JobsPage'
 import OrganizationsPage from './pages/platform/OrganizationsPage'
+import AdminStudentsPage from './pages/admin/AdminStudentsPage'
 
 function RequireAuth({ children, roles }: { children: React.ReactNode; roles?: string[] }) {
-  const { user, isLoading } = useAuth()
+  const { user, effectiveRole, isLoading } = useAuth()
   if (isLoading) return <div className="min-h-screen flex items-center justify-center text-gray-400">Loading…</div>
   if (!user) return <Navigate to="/login" replace />
-  if (roles && !roles.includes(String(user.role))) return <Navigate to="/dashboard" replace />
+  if (roles && !roles.includes(String(effectiveRole))) return <Navigate to="/dashboard" replace />
   return <AppLayout>{children}</AppLayout>
 }
 
@@ -97,9 +98,10 @@ export default function App() {
           {/* Institution routes */}
           <Route path="/institution/stats" element={<RequireAuth roles={['INSTITUTION_ADMIN','FACULTY','institution']}><InstitutionStats /></RequireAuth>} />
           <Route path="/dashboard" element={<RequireAuth><RoleDashboard /></RequireAuth>} />
+          <Route path="/admin/students" element={<RequireAuth roles={['ADMIN','admin']}><AdminStudentsPage /></RequireAuth>} />
           <Route path="/mentor/dashboard" element={<RequireAuth roles={['MENTOR_TRAINER']}><RoleDashboard /></RequireAuth>} />
           <Route path="/faculty/dashboard" element={<RequireAuth roles={['FACULTY','INSTITUTION_ADMIN']}><RoleDashboard /></RequireAuth>} />
-          <Route path="/organizations" element={<RequireAuth roles={['INDUSTRY_ADMIN','INSTITUTION_ADMIN','FACULTY','company','institution']}><OrganizationsPage /></RequireAuth>} />
+          <Route path="/organizations" element={<RequireAuth><OrganizationsPage /></RequireAuth>} />
 
           {/* Fallback */}
           <Route path="*" element={<Navigate to="/login" replace />} />

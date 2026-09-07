@@ -14,10 +14,8 @@ api.interceptors.request.use((config) => {
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 
 export const authApi = {
-  register: (data: { email: string; password: string; full_name: string; role: string }) => {
-    const [first_name, ...rest] = data.full_name.trim().split(/\s+/)
-    return api.post('/auth/register/student', { email: data.email, password: data.password, first_name, last_name: rest.join(' ') || 'User' })
-  },
+  register: (data: { email: string; password: string; first_name: string; last_name: string }) =>
+    api.post('/auth/register/student', data),
   login: (email: string, password: string) => api.post('/auth/login', { email, password }),
   me: () => api.get('/auth/me'),
 }
@@ -125,4 +123,9 @@ export const outcomesApi = {
   list: () => api.get('/outcomes/me'),
   create: (data: Record<string, unknown>) => api.post('/outcomes/me', data),
   update: (id: string, data: Record<string, unknown>) => api.patch(`/outcomes/me/${id}`, data),
+}
+
+export const adminApi = {
+  getStudents: (params?: { skip?: number; limit?: number }) => api.get('/admin/students', { params }),
+  getStudent: (id: string) => api.get(`/admin/students/${id}`),
 }

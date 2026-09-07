@@ -18,6 +18,18 @@ export interface OrganizationMembership {
   is_primary: boolean
 }
 
+export interface Organization {
+  id: string
+  name: string
+  organization_type: string
+  slug: string
+  is_active: boolean
+  /** Role of the current user in this organization (contextual, not global). */
+  role?: ActorRole | string | null
+  membership_role?: ActorRole | string | null
+  membership_is_primary?: boolean
+}
+
 export interface AuthToken {
   access_token: string
   token_type: string

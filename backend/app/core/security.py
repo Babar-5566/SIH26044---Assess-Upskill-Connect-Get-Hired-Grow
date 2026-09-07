@@ -3,14 +3,18 @@ from jose import jwt, JWTError
 from threading import Lock
 from uuid import uuid4
 from passlib.context import CryptContext
+import bcrypt
 from app.core.config import settings
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 ALGORITHM = "HS256"
 _revoked_tokens: dict[str, float] = {}
 _revocation_lock = Lock()
-def hash_password(password: str) -> str: return pwd_context.hash(password)
-def verify_password(password: str, hashed: str) -> bool: return pwd_context.verify(password, hashed)
+def hash_password(password: str) -> str:
+    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+
+def verify_password(password: str, hashed: str) -> bool:
+    return bcrypt.checkpw(password.encode("utf-8"), hashed.encode("utf-8"))
 def create_access_token(subject: str, role: str) -> str:
     now = datetime.now(timezone.utc)
     exp = now + timedelta(minutes=settings.access_token_expire_minutes)

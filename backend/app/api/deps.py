@@ -7,7 +7,7 @@ from app.models import User
 from app.models import OrganizationMembership
 from app.core.security import decode_token
 bearer=HTTPBearer(auto_error=False)
-def get_current_user(credentials=Depends(bearer), db:Session=Depends(get_db)):
+def get_current_user(credentials=Depends(bearer), db:Session=Depends(get_db), x_organization_id: str|None=Header(default=None,alias="X-Organization-ID")):
  if not credentials: raise HTTPException(401,"Unauthorized")
  p=decode_token(credentials.credentials)
  if not p or not p.get('sub'):
@@ -16,10 +16,36 @@ def get_current_user(credentials=Depends(bearer), db:Session=Depends(get_db)):
  except (ValueError, TypeError): raise HTTPException(401,"Unauthorized")
  u=db.get(User,user_id)
  if not u or not u.is_active: raise HTTPException(401,"Unauthorized")
+ # Keep the persisted platform role untouched, while exposing the role this
+ # user has in the selected organization for authorization/UI decisions.
+ # Clients select context explicitly via X-Organization-ID; this allows one
+ # account to hold different roles in different organizations.
+ u.effective_role = u.role
+ u.active_organization_id = None
+ if x_organization_id:
+  try:
+   organization_id = UUID(x_organization_id)
+  except (ValueError, TypeError):
+   raise HTTPException(400, "Invalid organization context")
+  membership = db.query(OrganizationMembership).filter(
+   OrganizationMembership.user_id == u.id,
+   OrganizationMembership.organization_id == organization_id,
+   OrganizationMembership.status == "ACTIVE",
+  ).first()
+  if not membership:
+   raise HTTPException(403, "Active organization membership required")
+  u.effective_role = membership.role
+  u.active_organization_id = organization_id
  return u
 def require_roles(*roles):
  def dep(user=Depends(get_current_user)):
-  if user.role not in roles: raise HTTPException(403,"Forbidden")
+  if user.role == "ADMIN":
+   allowed = "ADMIN" in roles
+  elif getattr(user, "active_organization_id", None) is not None:
+   allowed = getattr(user, "effective_role", None) in roles
+  else:
+   allowed = user.role in roles
+  if not allowed: raise HTTPException(403,"Forbidden")
   return user
  return dep
 
@@ -37,14 +63,10 @@ def require_role(role):
  allowed=aliases.get(role.lower(),(role.upper(),))
  def dep(user=Depends(get_current_user), db:Session=Depends(get_db), x_organization_id: str|None=Header(default=None,alias="X-Organization-ID")):
   if x_organization_id:
-   try: organization_id=UUID(x_organization_id)
-   except ValueError: raise HTTPException(400,"Invalid organization context")
-   membership=db.query(OrganizationMembership).filter(OrganizationMembership.user_id==user.id,OrganizationMembership.organization_id==organization_id,OrganizationMembership.status=="ACTIVE",OrganizationMembership.role.in_(allowed)).first()
-   if membership:
-    user.active_organization_id=organization_id
-    user.effective_role=membership.role
-    return user
-   raise HTTPException(403,"Active organization membership required")
+   # get_current_user has already validated and resolved this context.
+   if user.role == "ADMIN" and "ADMIN" in allowed: return user
+   if getattr(user, "effective_role", None) in allowed: return user
+   raise HTTPException(403,"Insufficient organization permissions")
   if user.role in allowed: return user
   raise HTTPException(403,"Forbidden")
  return dep

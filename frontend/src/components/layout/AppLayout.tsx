@@ -10,9 +10,9 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       <main className="flex-1 overflow-y-auto">
         {organizations.length > 0 && (
           <header className="bg-white border-b border-gray-200 px-8 py-3 flex justify-end">
-            <select className="border rounded-md px-3 py-2 text-sm" value={activeOrganizationId || ''} onChange={(event) => switchOrganization(event.target.value)}>
-              <option value="" disabled>Select organization</option>
-              {organizations.map((organization: any) => <option value={organization.id} key={organization.id}>{organization.name}</option>)}
+            <select className="border rounded-md px-3 py-2 text-sm" value={activeOrganizationId || ''} onChange={(event) => switchOrganization(event.target.value || null)}>
+              <option value="">Personal account</option>
+              {organizations.map((organization: any) => <option value={organization.id} key={organization.id}>{organization.name} ({organization.membership_role || organization.role_for_user || organization.membership?.role || organization.role || 'member'})</option>)}
             </select>
           </header>
         )}

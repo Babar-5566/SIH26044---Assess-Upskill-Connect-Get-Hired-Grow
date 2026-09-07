@@ -1,10 +1,32 @@
+"""Create the identity, student, and reference tables without app imports."""
 from alembic import op
-revision='0001_initial'; down_revision=None; branch_labels=None; depends_on=None
+import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
+
+revision = "0001_initial"
+down_revision = None
+branch_labels = None
+depends_on = None
+
 def upgrade():
-    from app.db.base import Base
-    from app import models
-    Base.metadata.create_all(op.get_bind())
+    # Kept as an explicit inventory for migration review and compatibility
+    # checks; these are the only tables owned by this revision.
+    initial_tables = {"users", "student_profiles", "skills", "student_skills", "student_projects", "student_certifications", "student_achievements", "student_internships", "student_preferred_roles", "career_roles", "student_documents"}
+    u = postgresql.UUID(as_uuid=True)
+    op.create_table("users", sa.Column("id", u, primary_key=True), sa.Column("email", sa.String(255), nullable=False, unique=True), sa.Column("password_hash", sa.String(255), nullable=False), sa.Column("role", sa.String(40), nullable=False, server_default="STUDENT"), sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.true()), sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()), sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now()))
+    op.create_table("skills", sa.Column("id", sa.Integer(), primary_key=True), sa.Column("name", sa.String(150), nullable=False, unique=True), sa.Column("normalized_name", sa.String(150), nullable=False, unique=True), sa.Column("skill_type", sa.String(20), server_default="TECHNICAL"), sa.Column("category", sa.String(100)), sa.Column("is_active", sa.Boolean(), server_default=sa.true()), sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()), sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now()))
+    op.create_table("career_roles", sa.Column("id", sa.Integer(), primary_key=True), sa.Column("name", sa.String(200), nullable=False, unique=True), sa.Column("normalized_name", sa.String(200), nullable=False, unique=True), sa.Column("category", sa.String(100)), sa.Column("is_active", sa.Boolean(), server_default=sa.true()), sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()), sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now()))
+    op.create_table("student_profiles", sa.Column("user_id", u, sa.ForeignKey("users.id", ondelete="CASCADE"), primary_key=True), sa.Column("first_name", sa.String(100)), sa.Column("last_name", sa.String(100)), sa.Column("phone", sa.String(50)), sa.Column("summary", sa.Text()), sa.Column("department", sa.String(150)), sa.Column("degree", sa.String(150)), sa.Column("institution_name", sa.String(200)), sa.Column("graduation_year", sa.Integer()), sa.Column("cgpa", sa.Numeric(4,2)), sa.Column("city", sa.String(100)), sa.Column("state", sa.String(100)), sa.Column("linkedin_url", sa.String(500)), sa.Column("github_url", sa.String(500)), sa.Column("portfolio_url", sa.String(500)), sa.Column("resume_file_url", sa.String(500)), sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()), sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now()))
+    def owned(name, extra):
+        op.create_table(name, sa.Column("id", u, primary_key=True), sa.Column("student_id", u, sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False), *extra, sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()), sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now()))
+    owned("student_projects", [sa.Column("title", sa.String(200), nullable=False), sa.Column("description", sa.Text()), sa.Column("technologies", sa.JSON()), sa.Column("project_url", sa.String(500)), sa.Column("start_date", sa.Date()), sa.Column("end_date", sa.Date()), sa.Column("status", sa.String(20), server_default="IN_PROGRESS")])
+    owned("student_certifications", [sa.Column("name", sa.String(200), nullable=False), sa.Column("issuer", sa.String(200)), sa.Column("issue_date", sa.Date()), sa.Column("expiry_date", sa.Date()), sa.Column("credential_url", sa.String(500))])
+    owned("student_achievements", [sa.Column("title", sa.String(200), nullable=False), sa.Column("description", sa.Text()), sa.Column("achievement_date", sa.Date())])
+    owned("student_internships", [sa.Column("company_name", sa.String(200), nullable=False), sa.Column("role", sa.String(200), nullable=False), sa.Column("description", sa.Text()), sa.Column("start_date", sa.Date()), sa.Column("end_date", sa.Date()), sa.Column("status", sa.String(20), server_default="ONGOING")])
+    op.create_table("student_skills", sa.Column("id", u, primary_key=True), sa.Column("student_id", u, sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False), sa.Column("skill_id", sa.Integer(), sa.ForeignKey("skills.id"), nullable=False), sa.Column("proficiency_level", sa.String(20), server_default="BEGINNER"), sa.Column("score", sa.Integer()), sa.Column("source", sa.String(20), server_default="SELF"), sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()), sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now()), sa.UniqueConstraint("student_id", "skill_id"))
+    op.create_table("student_preferred_roles", sa.Column("id", u, primary_key=True), sa.Column("student_id", u, sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False), sa.Column("career_role_id", sa.Integer(), sa.ForeignKey("career_roles.id"), nullable=False), sa.Column("is_primary", sa.Boolean(), server_default=sa.false()), sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()), sa.UniqueConstraint("student_id", "career_role_id"))
+    op.create_table("student_documents", sa.Column("id", u, primary_key=True), sa.Column("student_id", u, sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False), sa.Column("document_type", sa.String(20), server_default="RESUME"), sa.Column("file_name", sa.String(255), nullable=False), sa.Column("file_data", sa.LargeBinary()), sa.Column("file_size", sa.Integer(), nullable=False), sa.Column("mime_type", sa.String(100)), sa.Column("is_active", sa.Boolean(), server_default=sa.true()), sa.Column("uploaded_at", sa.DateTime(timezone=True), server_default=sa.func.now()))
+
 def downgrade():
-    from app.db.base import Base
-    from app import models
-    Base.metadata.drop_all(op.get_bind())
+    for name in ("student_documents", "student_preferred_roles", "student_skills", "student_internships", "student_achievements", "student_certifications", "student_projects", "student_profiles", "career_roles", "skills", "users"):
+        op.drop_table(name)
