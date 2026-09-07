@@ -38,7 +38,20 @@ def add_member(organization_id: UUID, data: MembershipCreate, db: Session = Depe
     admin_role = "INSTITUTION_ADMIN" if org.organization_type == "INSTITUTION" else "INDUSTRY_ADMIN"
     admin = db.query(OrganizationMembership).filter_by(user_id=user.id, organization_id=organization_id, role=admin_role, status="ACTIVE").first()
     if not admin: raise HTTPException(403, "Organization administrator permission required")
-    target_user = db.get(User, data.user_id)
+    try:
+        identifier = data.identifier()
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    if data.user_id and not data.user_identifier:
+        target_user = db.get(User, data.user_id)
+    else:
+        # Existing accounts only have an email column. Accept the full email
+        # or the email local-part as the username-style identifier.
+        target_user = db.query(User).filter(User.email.ilike(identifier)).first()
+        if not target_user and "@" not in identifier:
+            target_user = db.query(User).filter(
+                User.email.ilike(f"{identifier}@%")
+            ).first()
     if not target_user or not target_user.is_active: raise HTTPException(404, "Active user not found")
     allowed_roles = ({"STUDENT", "FACULTY", "INSTITUTION_ADMIN", "MENTOR_TRAINER"}
                      if org.organization_type == "INSTITUTION"
@@ -46,11 +59,13 @@ def add_member(organization_id: UUID, data: MembershipCreate, db: Session = Depe
     if data.role not in allowed_roles:
         raise HTTPException(422, "Role is not valid for this organization type")
     duplicate = db.query(OrganizationMembership).filter_by(
-        user_id=data.user_id, organization_id=organization_id, role=data.role
+        user_id=target_user.id, organization_id=organization_id, role=data.role
     ).first()
     if duplicate:
         raise HTTPException(409, "Membership already exists")
-    row = OrganizationMembership(organization_id=organization_id, **data.model_dump()); db.add(row); db.commit(); db.refresh(row); return row
+    row = OrganizationMembership(organization_id=organization_id, user_id=target_user.id,
+                                 role=data.role, is_primary=data.is_primary)
+    db.add(row); db.commit(); db.refresh(row); return row
 
 @router.get("/{organization_id}/members", response_model=list[MembershipOut])
 def members(organization_id: UUID, db: Session = Depends(get_db), user=Depends(get_current_user)):

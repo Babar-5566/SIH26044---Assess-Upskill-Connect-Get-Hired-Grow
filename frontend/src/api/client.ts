@@ -95,7 +95,7 @@ export const organizationApi = {
   list: () => api.get('/organizations'),
   create: (data: { name: string; organization_type: string; slug: string }) => api.post('/organizations', data),
   members: (organizationId: string) => api.get(`/organizations/${organizationId}/members`),
-  addMember: (organizationId: string, data: { user_id: string; role: string; is_primary?: boolean }) => api.post(`/organizations/${organizationId}/members`, data),
+  addMember: (organizationId: string, data: { user_identifier: string; role: string; is_primary?: boolean }) => api.post(`/organizations/${organizationId}/members`, data),
 }
 
 export const resumeIntelligenceApi = {

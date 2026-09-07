@@ -15,9 +15,16 @@ class OrganizationOut(OrganizationCreate):
     model_config = ConfigDict(from_attributes=True)
 
 class MembershipCreate(BaseModel):
-    user_id: UUID
+    user_id: UUID | None = None
+    user_identifier: str | None = Field(default=None, min_length=1, max_length=255)
     role: str
     is_primary: bool = False
+
+    def identifier(self) -> str:
+        value = self.user_identifier or (str(self.user_id) if self.user_id else None)
+        if not value:
+            raise ValueError("user_identifier or user_id is required")
+        return value.strip()
 
 class MembershipOut(BaseModel):
     id: UUID
