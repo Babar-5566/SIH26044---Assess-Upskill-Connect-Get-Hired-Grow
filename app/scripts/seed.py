@@ -5,7 +5,7 @@ SKILLS=['Java','Python','SQL','Spring Boot','REST API','Docker','HTML','CSS','Ja
 ROLES=['Java Backend Developer','Frontend Developer','Full Stack Developer','Data Analyst','Data Scientist','Cloud Engineer','DevOps Engineer']
 def main():
     db=SessionLocal()
-    for email,pw,role in [('admin@example.com','Admin@123','ADMIN'),('student@example.com','Student@123','STUDENT')]:
+    for email,pw,role in [('admin.test@example.com','admin@123','ADMIN'),('student.test@gmail.com','student@123','STUDENT'),('industry.admin.test@example.com','industry@123','INDUSTRY_ADMIN'),('recruiter.test@example.com','recruiter@123','INDUSTRY_MEMBER_RECRUITER'),('institution.admin.test@example.com','institution@123','INSTITUTION_ADMIN'),('faculty.test@example.com','faculty@123','FACULTY'),('mentor.test@example.com','mentor@123','MENTOR_TRAINER')]:
         u=db.query(User).filter_by(email=email).first()
         if not u:
             u=User(email=email,password_hash=hash_password(pw),role=role); db.add(u); db.flush()

@@ -20,6 +20,7 @@ import CompanyInternships from './pages/internship/CompanyInternships'
 import PostInternship from './pages/internship/PostInternship'
 import ApplicantsList from './pages/internship/ApplicantsList'
 import AcademicianOpportunities from './pages/internship/AcademicianOpportunities'
+import PostOpportunity from './pages/internship/PostOpportunity'
 import RoleDashboard from './pages/dashboard/RoleDashboard'
 import AssessmentsPage from './pages/platform/AssessmentsPage'
 import InterviewsPage from './pages/platform/InterviewsPage'
@@ -89,6 +90,7 @@ export default function App() {
           {/* Company routes */}
           <Route path="/company/internships" element={<RequireAuth roles={['INDUSTRY_MEMBER_RECRUITER','INDUSTRY_ADMIN','company']}><CompanyInternships /></RequireAuth>} />
           <Route path="/company/internships/new" element={<RequireAuth roles={['INDUSTRY_MEMBER_RECRUITER','INDUSTRY_ADMIN','company']}><PostInternship /></RequireAuth>} />
+          <Route path="/company/opportunities/new" element={<RequireAuth roles={['INDUSTRY_MEMBER_RECRUITER','INDUSTRY_ADMIN','company']}><PostOpportunity /></RequireAuth>} />
           <Route path="/company/internships/:postingId/applicants" element={<RequireAuth roles={['INDUSTRY_MEMBER_RECRUITER','INDUSTRY_ADMIN','company']}><ApplicantsList /></RequireAuth>} />
 
           {/* Academician routes */}

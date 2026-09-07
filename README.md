@@ -159,8 +159,13 @@ python -m app.scripts.seed
 
 Local demo accounts:
 
-- Admin: `admin@example.com` / `Admin@123`
-- Student: `student@example.com` / `Student@123`
+- Student: `student.test@gmail.com` / `student@123`
+- Admin: `admin.test@example.com` / `admin@123`
+- Industry admin: `industry.admin.test@example.com` / `industry@123`
+- Recruiter: `recruiter.test@example.com` / `recruiter@123`
+- Institution admin: `institution.admin.test@example.com` / `institution@123`
+- Faculty: `faculty.test@example.com` / `faculty@123`
+- Mentor: `mentor.test@example.com` / `mentor@123`
 
 ## Run the API
 
