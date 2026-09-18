@@ -64,6 +64,7 @@ export const internshipApi = {
   // Academician
   getAcademicianOpportunities: (type?: string) =>
     api.get('/internships/academician/opportunities', { params: type ? { type } : {} }),
+  createAcademicianOpportunity: (data: any) => api.post('/internships/academician/opportunities', data),
   // Institution
   getInstitutionStats: () => api.get('/internships/institution/stats'),
 }
@@ -95,6 +96,7 @@ export const organizationApi = {
   list: () => api.get('/organizations'),
   create: (data: { name: string; organization_type: string; slug: string }) => api.post('/organizations', data),
   members: (organizationId: string) => api.get(`/organizations/${organizationId}/members`),
+  memberDetails: (organizationId: string, userId: string) => api.get(`/organizations/${organizationId}/members/${userId}`),
   addMember: (organizationId: string, data: { user_id: string; role: string; is_primary?: boolean }) => api.post(`/organizations/${organizationId}/members`, data),
 }
 

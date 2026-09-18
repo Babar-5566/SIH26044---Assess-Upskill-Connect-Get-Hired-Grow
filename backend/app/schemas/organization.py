@@ -26,4 +26,7 @@ class MembershipOut(BaseModel):
     role: str
     status: str
     is_primary: bool
+    name: str | None = None
+    email: str | None = None
+    profile: dict | None = None
     model_config = ConfigDict(from_attributes=True)

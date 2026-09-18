@@ -56,4 +56,14 @@ def add_member(organization_id: UUID, data: MembershipCreate, db: Session = Depe
 def members(organization_id: UUID, db: Session = Depends(get_db), user=Depends(get_current_user)):
     allowed = db.query(OrganizationMembership).filter_by(user_id=user.id, organization_id=organization_id, status="ACTIVE").first()
     if not allowed: raise HTTPException(403, "Active organization membership required")
-    return db.query(OrganizationMembership).filter_by(organization_id=organization_id, status="ACTIVE").all()
+    rows = db.query(OrganizationMembership).filter_by(organization_id=organization_id, status="ACTIVE").all()
+    return [{**{c.name: getattr(row, c.name) for c in row.__table__.columns}, "name": " ".join(filter(None, [getattr(row.user.profile, "first_name", None), getattr(row.user.profile, "last_name", None)])) or row.user.email, "email": row.user.email, "profile": ({c.name: getattr(row.user.profile, c.name) for c in row.user.profile.__table__.columns if c.name != "user_id"} if row.user.profile else None)} for row in rows]
+
+@router.get("/{organization_id}/members/{member_user_id}", response_model=MembershipOut)
+def member_details(organization_id: UUID, member_user_id: UUID, db: Session = Depends(get_db), user=Depends(get_current_user)):
+    allowed = db.query(OrganizationMembership).filter_by(user_id=user.id, organization_id=organization_id, status="ACTIVE").first()
+    if not allowed: raise HTTPException(403, "Active organization membership required")
+    row = db.query(OrganizationMembership).filter_by(user_id=member_user_id, organization_id=organization_id, status="ACTIVE").first()
+    if not row: raise HTTPException(404, "Organization member not found")
+    profile = row.user.profile
+    return {**{c.name: getattr(row, c.name) for c in row.__table__.columns}, "name": " ".join(filter(None, [getattr(profile, "first_name", None), getattr(profile, "last_name", None)])) or row.user.email, "email": row.user.email, "profile": ({c.name: getattr(profile, c.name) for c in profile.__table__.columns if c.name != "user_id"} if profile else None)}
