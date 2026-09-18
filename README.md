@@ -300,4 +300,8 @@ Visual workflows and UI states are verified using **Playwright MCP**:
 
 ## 📄 License
 
-This project is licensed under the **MIT License** — see the [LICENSE](LICENSE) file for details.
+This project is licensed under the **MIT License**.
+
+- Full license text: [LICENSE](LICENSE)
+- You are free to use, modify, distribute, and integrate this software into commercial or academic projects, provided the original copyright notice and warranty disclaimer are preserved.
+
