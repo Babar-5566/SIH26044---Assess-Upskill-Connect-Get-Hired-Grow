@@ -50,9 +50,18 @@ def get_optional_user(credentials=Depends(bearer), db: Session = Depends(get_db)
 
 
 def sanitize_filename(name: str) -> str:
-    """Strips directory traversal components and non-safe characters."""
-    clean = os.path.basename(name)
-    clean = re.sub(r"[^\w\.\- ]", "_", clean)
+    """Strips directory traversal components and non-safe characters.
+
+    Works cross-platform: replaces both forward and backslash separators
+    before extracting the basename, then removes any residual '..' segments.
+    """
+    # Normalise both slash styles to a common separator, then take basename
+    clean = name.replace("\\", "/")
+    clean = clean.split("/")[-1]          # equivalent to basename on all platforms
+    # Remove any residual '..' left after basename extraction
+    clean = re.sub(r"\.{2,}", "", clean)
+    # Strip non-safe characters (allow word chars, single dot, hyphen, space)
+    clean = re.sub(r"[^\w.\- ]", "_", clean)
     return clean[:200]
 
 
