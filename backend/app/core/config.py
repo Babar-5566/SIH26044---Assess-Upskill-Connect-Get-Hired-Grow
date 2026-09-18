@@ -20,11 +20,28 @@ class Settings(BaseSettings):
     audit_persist_enabled: bool = False
     ai_provider: str = "gemini"
     gemini_api_key: SecretStr | None = None
-    gemini_model: str = "gemini-2.5-flash"
+    gemini_model: str = "gemini-3-flash-preview"
     openrouter_api_key: SecretStr | None = None
     openrouter_model: str = "openai/gpt-4o-mini"
-    ai_timeout_seconds: float = 20.0
+    ai_timeout_seconds: float = 40.0
     ai_max_retries: int = 2
+
+    # Multi-LLM Arena Settings
+    openai_api_key: SecretStr | None = None
+    openai_model: str = "gpt-4o"
+    anthropic_api_key: SecretStr | None = None
+    claude_model: str = "claude-3-5-sonnet-20241022"
+
+    # Enterprise RAG Settings
+    rag_storage_dir: str = "storage/rag_documents"
+    rag_vectors_dir: str = "storage/rag_vectors"
+    rag_max_file_size_mb: int = 25
+    rag_chunk_size: int = 700
+    rag_chunk_overlap: int = 100
+    rag_top_k: int = 5
+    rag_similarity_threshold: float = 0.65
+    embedding_model: str = "text-embedding-3-small"
+
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
     @field_validator("debug", mode="before")
     @classmethod

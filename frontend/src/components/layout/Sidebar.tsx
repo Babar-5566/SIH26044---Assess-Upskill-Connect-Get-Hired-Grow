@@ -1,7 +1,7 @@
 import React from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
-import { BookOpen, Briefcase, GraduationCap, LogOut, LayoutDashboard, Building2, Users } from 'lucide-react'
+import { BookOpen, Briefcase, GraduationCap, LogOut, LayoutDashboard, Building2, Users, Sparkles } from 'lucide-react'
 
 export default function Sidebar() {
   const { user, effectiveRole, activeOrganizationRole, logout } = useAuth()
@@ -35,13 +35,15 @@ export default function Sidebar() {
   ]
   const mentorLinks = [{ to: '/student/mentorship', icon: <Users size={18} />, label: 'Mentees' }]
   const roleDashboard = { to: '/dashboard', icon: <LayoutDashboard size={18} />, label: 'Dashboard' }
+  const aiAssistantLink = { to: '/ai-assistant', icon: <Sparkles size={18} className="text-blue-600" />, label: 'Multi-LLM & RAG AI' }
 
-  const links = [roleDashboard, ...( 
+  const links = [roleDashboard, aiAssistantLink, ...( 
     (effectiveRole === 'student' || effectiveRole === 'STUDENT') ? studentLinks :
     (effectiveRole === 'company' || effectiveRole === 'INDUSTRY_MEMBER_RECRUITER' || effectiveRole === 'INDUSTRY_ADMIN') ? companyLinks :
     (effectiveRole === 'academician' || effectiveRole === 'FACULTY') ? [...academicianLinks, ...institutionLinks] :
     (effectiveRole === 'institution' || effectiveRole === 'INSTITUTION_ADMIN') ? institutionLinks :
     effectiveRole === 'MENTOR_TRAINER' ? mentorLinks : [])]
+
 
   return (
     <aside className="w-64 bg-white border-r border-gray-200 flex flex-col min-h-screen">

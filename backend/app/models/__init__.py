@@ -14,3 +14,4 @@ from app.models.industry import IndustryOpportunity, IndustryFeedback
 from app.models.organization import Organization, OrganizationMembership
 from app.models.mentorship import MentorAssignment
 from app.models.notification import Notification
+from app.models.rag_document import RAGDocument

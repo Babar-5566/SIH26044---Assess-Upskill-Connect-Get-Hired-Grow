@@ -31,6 +31,7 @@ from app.api.v1.endpoints.outcomes import router as outcomes_router
 from app.api.v1.endpoints.resume_intelligence import router as resume_intelligence_router
 from app.api.v1.endpoints.readiness import router as readiness_router
 from app.api.v1.endpoints.notifications import router as notifications_router
+from app.api.v1.endpoints.ai_assistant import router as ai_assistant_router
 
 router = APIRouter()
 
@@ -272,3 +273,4 @@ router.include_router(outcomes_router)
 router.include_router(resume_intelligence_router)
 router.include_router(readiness_router)
 router.include_router(notifications_router)
+router.include_router(ai_assistant_router)

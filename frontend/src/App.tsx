@@ -28,6 +28,7 @@ import MentorshipPage from './pages/platform/MentorshipPage'
 import OutcomesPage from './pages/platform/OutcomesPage'
 import JobsPage from './pages/platform/JobsPage'
 import OrganizationsPage from './pages/platform/OrganizationsPage'
+import AIAssistantPage from './pages/ai/AIAssistantPage'
 
 function RequireAuth({ children, roles }: { children: React.ReactNode; roles?: string[] }) {
   const { user, effectiveRole, isLoading } = useAuth()
@@ -99,6 +100,7 @@ export default function App() {
           {/* Institution routes */}
           <Route path="/institution/stats" element={<RequireAuth roles={['INSTITUTION_ADMIN','FACULTY','institution']}><InstitutionStats /></RequireAuth>} />
           <Route path="/dashboard" element={<RequireAuth><RoleDashboard /></RequireAuth>} />
+          <Route path="/ai-assistant" element={<RequireAuth><AIAssistantPage /></RequireAuth>} />
           <Route path="/mentor/dashboard" element={<RequireAuth roles={['MENTOR_TRAINER']}><RoleDashboard /></RequireAuth>} />
           <Route path="/faculty/dashboard" element={<RequireAuth roles={['FACULTY','INSTITUTION_ADMIN']}><RoleDashboard /></RequireAuth>} />
           <Route path="/organizations" element={<RequireAuth><OrganizationsPage /></RequireAuth>} />
