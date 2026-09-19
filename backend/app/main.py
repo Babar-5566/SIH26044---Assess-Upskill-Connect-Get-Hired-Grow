@@ -1,3 +1,5 @@
+import asyncio
+from contextlib import asynccontextmanager, suppress
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
@@ -6,7 +8,19 @@ from app.api.v1.router import router
 from app.core.config import settings
 from app.core.exceptions import validation_handler, integrity_handler, generic_handler, error_response
 from app.core.middleware import AuditMiddleware, RateLimitMiddleware
-app = FastAPI(title="SkillBridge AI", debug=settings.debug)
+@asynccontextmanager
+async def lifespan(app):
+    from app.services.profile_worker import worker_loop
+    task = asyncio.create_task(worker_loop()) if settings.profile_analysis_worker_enabled else None
+    try:
+        yield
+    finally:
+        if task:
+            task.cancel()
+            with suppress(asyncio.CancelledError):
+                await task
+
+app = FastAPI(title="SkillBridge AI", debug=settings.debug, lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origins, allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 app.add_middleware(AuditMiddleware)
 app.add_middleware(RateLimitMiddleware)

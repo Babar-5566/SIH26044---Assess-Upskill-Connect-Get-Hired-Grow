@@ -24,7 +24,8 @@ def test_alembic_revision_chain_is_linear_and_reaches_0010():
     assert revisions["0011_notification_delivery"] == "0010_org_scope_backfill"
     heads = set(revisions) - {parent for parent in revisions.values() if parent}
     assert revisions["0012_rag_documents"] == "0011_notification_delivery"
-    assert heads == {"0012_rag_documents"}
+    assert revisions["0013_profile_resume_analysis"] == "0012_rag_documents"
+    assert heads == {"0013_profile_resume_analysis"}
     assert max(map(len, revisions)) <= 32
 
 
