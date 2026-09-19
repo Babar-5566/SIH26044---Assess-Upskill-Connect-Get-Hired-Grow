@@ -62,6 +62,8 @@ class OpenAIAdapter(BaseAsyncLLMClient):
             )
             elapsed_ms = int((time.perf_counter() - start_time) * 1000)
             content = response.choices[0].message.content or ""
+            if not content.strip():
+                raise ValueError("Provider returned no text")
 
             return LLMResponse(
                 provider=self.provider,
@@ -109,7 +111,7 @@ class OpenAIAdapter(BaseAsyncLLMClient):
                 content="",
                 latency_ms=elapsed_ms,
                 status="ERROR",
-                error_message=f"OpenAI service error: {exc.message if hasattr(exc, 'message') else str(exc)}",
+                error_message="OpenAI service unavailable. Please retry later.",
             )
         except Exception as exc:
             elapsed_ms = int((time.perf_counter() - start_time) * 1000)
@@ -119,5 +121,5 @@ class OpenAIAdapter(BaseAsyncLLMClient):
                 content="",
                 latency_ms=elapsed_ms,
                 status="ERROR",
-                error_message=f"Unexpected OpenAI error: {str(exc)}",
+                error_message="OpenAI request failed. Please retry later.",
             )

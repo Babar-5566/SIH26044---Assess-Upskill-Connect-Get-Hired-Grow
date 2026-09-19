@@ -12,11 +12,23 @@
 
 ---
 
+## Verification and upgrade notes
+
+The canonical application is in `backend/` and `frontend/`; the root `app/` is
+legacy code. Run backend commands **from `backend/`** to load the correct package.
+See [the audit report](docs/AI_ASSISTANT_AUDIT.md) for fixes, tests, and remaining limitations.
+
+- Run `python -m alembic upgrade head` from `backend/` to create the RAG metadata table (revision `0012_rag_documents`).
+- All AI routes require a valid login. Documents are private to their uploading user; legacy unowned documents are not public.
+- New vector snapshots include the embedding model identity. Legacy indexes without that identity, or indexes made with another model, require deliberate re-indexing into a new vector directory. Keep original documents and a backup; do not delete the old index automatically.
+- Local vector storage supports one backend worker. No-key embeddings are a deterministic test/demo mode, not semantic production embeddings.
+- Chat history is separate per model during the current page session; it is not saved across reloads.
+
 ## 📌 Executive Summary
 
 **SkillBridge AI** is an intelligent employability and skills acceleration platform built for students, academic institutions, mentors, and corporate recruiters. It unifies academic curricula with real-world industry demands, tracking student competencies, automated portfolio readiness, internship lifecycles, and employment outcomes.
 
-Powered by a modern **Enterprise Multi-LLM & RAG Assistant**, SkillBridge empowers users to query internal placement documents, compare competitive reasoning across **OpenAI GPT-4o**, **Anthropic Claude 3.5 Sonnet**, and **Google Gemini 1.5/2.5/3 Flash** simultaneously, and ingest corporate handbooks with strict **anti-hallucination grounding** and **clickable citations**.
+Powered by a modern **Enterprise Multi-LLM & RAG Assistant**, SkillBridge empowers users to query internal placement documents, compare competitive reasoning across **OpenAI GPT-4o**, **Anthropic Claude 3.5 Sonnet**, and **Google Gemini 1.5/2.5/3 Flash** simultaneously, and ingest corporate handbooks with strict **document grounding and citation validation** and **clickable citations**.
 
 ---
 
@@ -107,8 +119,8 @@ flowchart TD
 - 📚 **Grounded Document RAG with Verifiable Citations**:
   - Multi-format ingestion: **PDF**, **DOCX**, and **TXT** files (up to 25MB).
   - Semantic recursive chunker with overlap and page-number preservation.
-  - **Adaptive Thresholding Retrieval**: Dynamic cosine similarity scoring (0.48/0.45 fallback) ensuring 100% recall for scoped document queries.
-  - **Strict Anti-Hallucination Grounding**: Deterministic refusal (*"I could not find sufficient information in the uploaded documents to answer this question."*) when relevant context is absent.
+  - **Adaptive Thresholding Retrieval**: Dynamic cosine similarity scoring (0.48/0.45 fallback) for broad document queries when no explicit threshold is supplied. Top-K retrieval does not guarantee complete document coverage.
+  - **Grounded Answer Validation**: Deterministic refusal (*"I could not find sufficient information in the uploaded documents to answer this question."*) when relevant context is absent.
   - **Clickable Interactive Citations**: Footnote badges `[1]`, `[2]` linking directly to document names, page indices, and verbatim snippet previews.
 - 🎨 **Custom In-App Animated Delete Modal**:
   - Replaced browser `window.confirm()` with an animated dialog.
@@ -133,7 +145,7 @@ flowchart TD
 ## ⚡ Quick Start Guide
 
 ### Prerequisites
-- **Node.js**: `v18.x` or higher
+- **Node.js**: `v22.12` or higher (required by the current Vite toolchain)
 - **Python**: `3.11` or higher
 - **PostgreSQL**: `v16` running locally or accessible remotely
 
@@ -170,22 +182,11 @@ flowchart TD
    Copy-Item .env.example .env
    ```
 
-   Ensure the following keys are populated in `backend/.env`:
-   ```env
-   DATABASE_URL=postgresql+psycopg://skillbridge:skillbridge@localhost:5432/skillbridge
-   TEST_DATABASE_URL=postgresql+psycopg://skillbridge:skillbridge@localhost:5432/skillbridge_test
-   SECRET_KEY=your-super-secret-jwt-key
-   ACCESS_TOKEN_EXPIRE_MINUTES=60
-   CORS_ORIGINS=http://localhost:5173,http://localhost:3000
-
-   # AI Provider Keys
-   GEMINI_API_KEY=your_gemini_api_key
-   GEMINI_MODEL=gemini-2.5-flash
-   OPENAI_API_KEY=your_openai_api_key
-   CLAUDE_API_KEY=your_claude_api_key
-   OPENROUTER_API_KEY=your_openrouter_api_key
-   AI_TIMEOUT_SECONDS=40
-   ```
+   Configure the database URL and a randomly generated `SECRET_KEY` in `backend/.env`.
+   Provider key placeholders are in [backend/.env.example](backend/.env.example).
+   The backend accepts `GOOGLE_API_KEY` (or legacy `GEMINI_API_KEY`) and
+   `ANTHROPIC_API_KEY` (or legacy `CLAUDE_API_KEY`). Keep all keys server-side.
+   Choose models available to your provider account; configuration does not verify access.
 
 5. **Run Migrations & Seed Data**:
    ```bash
@@ -253,7 +254,7 @@ flowchart TD
 |---|---|---|
 | `GET` | `/models` | List active foundation models (Gemini, Claude, GPT-4o) with status |
 | `POST` | `/compare` | Dispatches identical prompt concurrently across all configured LLMs |
-| `POST` | `/chat` | Continuous conversational multi-turn chat with persistent context |
+| `POST` | `/chat` | Conversational chat with client-supplied per-model history |
 | `POST` | `/documents/upload` | Ingests PDF/DOCX/TXT, extracts text, generates vector chunks & index |
 | `GET` | `/documents` | Lists all indexed vector documents and chunk counts for current user |
 | `DELETE` | `/documents/{id}` | Purges document from disk and removes all vectors from index |
@@ -266,7 +267,8 @@ flowchart TD
 ### Automated Backend Tests
 Run the comprehensive pytest suite:
 ```bash
-pytest backend/tests -v
+cd backend
+python -m pytest -q
 ```
 
 **Test Coverage Highlights**:
@@ -278,14 +280,14 @@ pytest backend/tests -v
 - `test_security_audit.py`: Role boundaries, unauthorized token rejections.
 
 ```text
-============================= 20 passed in 22.46s =============================
+109 passed (offline tests; provider calls mocked or disabled)
 ```
 
 ### Automated End-to-End Verification
 Visual workflows and UI states are verified using **Playwright MCP**:
 - In-App animated delete confirmation modal verified with zero native browser alerts.
 - Clickable citation cards open snippet inspector modals with metadata.
-- 1-Click Re-Analysis triggers adaptive scoped retrieval with 100% chunk recall.
+- Scoped document queries preserve the requested relevance threshold and validate citation references.
 
 ---
 
@@ -293,7 +295,7 @@ Visual workflows and UI states are verified using **Playwright MCP**:
 
 - **Server-Side AI Secrets**: API keys for OpenAI, Anthropic, and Google Gemini are never leaked to client bundles or browser localStorage.
 - **Tenant Document Isolation**: Document ingestion and RAG vector searches are partitioned per authenticated user; cross-tenant document exposure is rejected at the vector query filter.
-- **Strict Anti-Hallucination**: If semantic similarity falls below threshold, the AI explicitly states insufficient context rather than hallucinating facts.
+- **Grounding limits**: Missing context and missing/invalid citation IDs produce the documented refusal. Valid citation IDs do not prove that every generated claim is supported; verify important answers against the full source chunks.
 - **Cryptographic Security**: Passwords hashed using bcrypt; JWT tokens validated with expiration boundaries and subject checks.
 
 ---

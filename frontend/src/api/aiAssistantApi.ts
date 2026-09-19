@@ -9,6 +9,18 @@ const baseURL = import.meta.env.VITE_API_URL || '/api/v1'
 
 const api = axios.create({ baseURL })
 
+export function getAssistantError(error: unknown, fallback: string): string {
+  if (axios.isAxiosError(error)) {
+    if (!error.response) return 'Cannot reach the server. Check your connection and try again.'
+    if (error.response.status === 401) return 'Your session has expired. Please sign in again.'
+    const body = error.response?.data
+    const message = body?.error?.message || body?.detail || body?.message
+    if (typeof message === 'string' && message !== 'Internal server error') return message
+    if (error.response.status >= 500) return 'The server could not complete this request. Please try again.'
+  }
+  return error instanceof Error ? error.message : fallback
+}
+
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('access_token')
   if (token) config.headers.Authorization = `Bearer ${token}`
@@ -24,6 +36,12 @@ export interface LLMModelResult {
   latency_ms: number
   status: 'SUCCESS' | 'ERROR'
   error_message?: string
+}
+
+export interface ModelStatus {
+  provider: string
+  model: string
+  is_configured: boolean
 }
 
 export interface CitationSource {
@@ -71,16 +89,20 @@ export interface DocumentDetail extends DocumentItem {
 }
 
 export const aiAssistantApi = {
+  checkHealth: () => api.get('/health', { timeout: 8000 }),
   getModels: () => api.get('/ai-assistant/models'),
   compareModels: (prompt: string, system_prompt?: string) =>
     api.post('/ai-assistant/compare', { prompt, system_prompt }),
   chatSingle: (prompt: string, provider: string, conversation_history: any[], system_prompt?: string) =>
     api.post('/ai-assistant/chat', { prompt, provider, conversation_history, system_prompt }),
-  uploadDocument: (file: File) => {
+  uploadDocument: (file: File, onProgress?: (percent: number) => void) => {
     const formData = new FormData()
     formData.append('file', file)
     return api.post('/ai-assistant/documents/upload', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
+      onUploadProgress: (event) => {
+        if (event.total) onProgress?.(Math.round(event.loaded * 100 / event.total))
+      },
     })
   },
   listDocuments: () => api.get('/ai-assistant/documents'),

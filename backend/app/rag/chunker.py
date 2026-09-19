@@ -19,67 +19,35 @@ class RecursiveTextChunker:
         chunk_overlap: int = 100,
         separators: Optional[List[str]] = None,
     ):
-        if chunk_overlap >= chunk_size:
+        if chunk_size <= 0 or chunk_overlap < 0 or chunk_overlap >= chunk_size:
             raise ValueError("chunk_overlap must be strictly smaller than chunk_size")
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
         self.separators = separators or ["\n\n", "\n", ". ", "! ", "? ", "; ", " ", ""]
 
-    def _split_text_with_separator(self, text: str, separator: str) -> List[str]:
-        if separator:
-            parts = text.split(separator)
-            # Re-attach separator to avoid losing sentence endings
-            return [p + separator for p in parts[:-1]] + ([parts[-1]] if parts[-1] else [])
-        return list(text)
-
     def split_text(self, text: str) -> List[str]:
-        """Splits text recursively until all segments satisfy chunk_size with overlap."""
-        final_chunks: List[str] = []
-        good_splits: List[str] = []
-
-        # Find the appropriate primary separator
-        separator = self.separators[-1]
-        for s in self.separators:
-            if s == "" or s in text:
-                separator = s
+        """Split at natural boundaries, with a hard size ceiling and exact overlap."""
+        chunks = []
+        start = 0
+        while start < len(text):
+            end = min(start + self.chunk_size, len(text))
+            if end < len(text):
+                # Prefer paragraphs/sentences, but always advance past the overlap.
+                minimum = start + max(self.chunk_overlap + 1, self.chunk_size // 2)
+                for separator in self.separators:
+                    if not separator:
+                        continue
+                    boundary = text.rfind(separator, minimum, end)
+                    if boundary >= 0:
+                        end = boundary + len(separator)
+                        break
+            chunk = text[start:end].strip()
+            if chunk:
+                chunks.append(chunk)
+            if end == len(text):
                 break
-
-        splits = self._split_text_with_separator(text, separator)
-
-        # Merge splits into chunks of target size with overlap
-        current_chunk: List[str] = []
-        current_length = 0
-
-        for split in splits:
-            split_len = len(split)
-
-            if current_length + split_len > self.chunk_size:
-                if current_chunk:
-                    chunk_str = "".join(current_chunk).strip()
-                    if chunk_str:
-                        final_chunks.append(chunk_str)
-
-                    # Keep overlap from the end of current_chunk
-                    overlap_chunk: List[str] = []
-                    overlap_len = 0
-                    for item in reversed(current_chunk):
-                        if overlap_len + len(item) <= self.chunk_overlap:
-                            overlap_chunk.insert(0, item)
-                            overlap_len += len(item)
-                        else:
-                            break
-                    current_chunk = overlap_chunk
-                    current_length = overlap_len
-
-            current_chunk.append(split)
-            current_length += split_len
-
-        if current_chunk:
-            chunk_str = "".join(current_chunk).strip()
-            if chunk_str:
-                final_chunks.append(chunk_str)
-
-        return final_chunks
+            start = end - self.chunk_overlap
+        return chunks
 
     def chunk_document(
         self,

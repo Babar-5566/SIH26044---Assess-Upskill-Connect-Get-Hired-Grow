@@ -58,14 +58,16 @@ def test_secret_hygiene_no_hardcoded_keys():
             assert not matches, f"Hardcoded secret detected in {py_file.name}: {matches}"
 
 
-def test_file_size_limit_rejection():
-    """Verify that uploads exceeding max allowed size (25MB) are blocked with HTTP 413."""
-    with TestClient(app) as client:
-        # Create virtual bytes payload exceeding limit
-        oversized = b"A" * (settings.rag_max_file_size_mb * 1024 * 1024 + 1024)
-        res = client.post(
-            "/api/v1/ai-assistant/documents/upload",
-            files={"file": ("huge_doc.txt", io.BytesIO(oversized), "text/plain")},
-        )
-        assert res.status_code == 413
-        assert "File exceeds maximum allowed size" in res.json()["error"]["message"]
+def test_file_size_limit_rejection(client):
+    """Authenticated uploads exceeding the size limit are rejected."""
+    registration = client.post('/api/v1/auth/register/student', json={
+        'email': 'upload-limit@example.com', 'password': 'StrongPass123', 'first_name': 'Test', 'last_name': 'User',
+    })
+    assert registration.status_code == 201
+    login = client.post('/api/v1/auth/login', json={'email': 'upload-limit@example.com', 'password': 'StrongPass123'})
+    client.headers['Authorization'] = 'Bearer ' + login.json()['data']['access_token']
+    oversized = b"A" * (settings.rag_max_file_size_mb * 1024 * 1024 + 1024)
+    response = client.post('/api/v1/ai-assistant/documents/upload',
+                           files={'file': ('huge_doc.txt', io.BytesIO(oversized), 'text/plain')})
+    assert response.status_code == 413
+    assert 'File exceeds maximum allowed size' in response.json()['error']['message']

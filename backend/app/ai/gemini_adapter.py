@@ -68,7 +68,7 @@ class GeminiAdapter(BaseAsyncLLMClient):
             async with httpx.AsyncClient(timeout=self.timeout_seconds) as client:
                 response = await client.post(
                     url,
-                    params={"key": self.api_key},
+                    headers={"x-goog-api-key": self.api_key},
                     json=payload,
                 )
 
@@ -88,7 +88,7 @@ class GeminiAdapter(BaseAsyncLLMClient):
                         fallback_url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent"
                         fallback_res = await client.post(
                             fallback_url,
-                            params={"key": self.api_key},
+                            headers={"x-goog-api-key": self.api_key},
                             json=payload,
                         )
                         if fallback_res.status_code == 200:
@@ -96,7 +96,9 @@ class GeminiAdapter(BaseAsyncLLMClient):
                             fb_candidates = fb_data.get("candidates", [])
                             if fb_candidates:
                                 fb_parts = fb_candidates[0].get("content", {}).get("parts", [])
-                                fb_content = "".join([p.get("text", "") for p in fb_parts if "text" in p])
+                                fb_content = "".join(p.get("text", "") for p in fb_parts if not p.get("thought"))
+                                if not fb_content.strip():
+                                    raise ValueError("Provider returned no text")
                                 return LLMResponse(
                                     provider=self.provider,
                                     model="gemini-3.1-flash-lite",
@@ -128,7 +130,9 @@ class GeminiAdapter(BaseAsyncLLMClient):
                     )
 
                 parts = candidates[0].get("content", {}).get("parts", [])
-                content = parts[0].get("text", "") if parts else ""
+                content = "".join(part.get("text", "") for part in parts if not part.get("thought"))
+                if not content.strip():
+                    raise ValueError("Provider returned no text")
 
                 return LLMResponse(
                     provider=self.provider,
@@ -156,7 +160,7 @@ class GeminiAdapter(BaseAsyncLLMClient):
                 content="",
                 latency_ms=elapsed_ms,
                 status="ERROR",
-                error_message=f"Gemini HTTP {exc.response.status_code}: {exc.response.text[:150]}",
+                error_message=f"Gemini service returned HTTP {exc.response.status_code}. Check provider configuration and retry.",
             )
         except Exception as exc:
             elapsed_ms = int((time.perf_counter() - start_time) * 1000)
@@ -166,5 +170,5 @@ class GeminiAdapter(BaseAsyncLLMClient):
                 content="",
                 latency_ms=elapsed_ms,
                 status="ERROR",
-                error_message=f"Unexpected Gemini error: {str(exc)}",
+                error_message="Gemini request failed. Please retry later.",
             )

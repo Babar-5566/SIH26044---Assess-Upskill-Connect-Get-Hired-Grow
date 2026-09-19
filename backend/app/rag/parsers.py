@@ -5,6 +5,7 @@ Skill: agency-rag-pipeline-engineer, agency-application-security-engineer
 
 import io
 import re
+import zipfile
 from typing import List
 import pypdf
 import docx
@@ -39,11 +40,12 @@ def parse_pdf(file_bytes: bytes, filename: str, doc_id: str) -> ParsedDocument:
     try:
         reader = pypdf.PdfReader(io.BytesIO(file_bytes))
     except Exception as exc:
-        raise ValueError(f"Unable to read PDF file: Corrupted or invalid format ({str(exc)})")
+        raise ValueError("Unable to read PDF file: Corrupted or invalid format.")
 
     if reader.is_encrypted:
         try:
-            reader.decrypt("")
+            if not reader.decrypt(""):
+                raise ValueError("Password required")
         except Exception:
             raise ValueError("PDF is encrypted or password-protected and cannot be processed.")
 
@@ -74,9 +76,12 @@ def parse_docx(file_bytes: bytes, filename: str, doc_id: str) -> ParsedDocument:
     Extracts text from Word DOCX paragraphs and tables.
     """
     try:
+        with zipfile.ZipFile(io.BytesIO(file_bytes)) as archive:
+            if sum(item.file_size for item in archive.infolist()) > 100 * 1024 * 1024:
+                raise ValueError("Word document expands beyond the 100 MB processing limit.")
         doc = docx.Document(io.BytesIO(file_bytes))
     except Exception as exc:
-        raise ValueError(f"Unable to read DOCX file: Corrupted or invalid format ({str(exc)})")
+        raise ValueError("Unable to read DOCX file: Corrupted or invalid format.")
 
     extracted_parts: List[str] = []
 
@@ -102,7 +107,7 @@ def parse_docx(file_bytes: bytes, filename: str, doc_id: str) -> ParsedDocument:
         original_filename=filename,
         file_type="docx",
         total_pages=1,
-        pages=[ParsedPage(page_number=1, text=full_text)],
+        pages=[ParsedPage(page_number=None, text=full_text)],
     )
 
 
@@ -110,8 +115,10 @@ def parse_txt(file_bytes: bytes, filename: str, doc_id: str) -> ParsedDocument:
     """
     Extracts plain text with encoding fallbacks (UTF-8, Latin-1, CP1252).
     """
+    if b"\x00" in file_bytes:
+        raise ValueError("Text document contains binary data. Please upload UTF-8 text.")
     text = ""
-    for encoding in ("utf-8", "utf-8-sig", "latin-1", "cp1252"):
+    for encoding in ("utf-8-sig", "cp1252", "latin-1"):
         try:
             text = file_bytes.decode(encoding)
             break
@@ -127,7 +134,7 @@ def parse_txt(file_bytes: bytes, filename: str, doc_id: str) -> ParsedDocument:
         original_filename=filename,
         file_type="txt",
         total_pages=1,
-        pages=[ParsedPage(page_number=1, text=cleaned)],
+        pages=[ParsedPage(page_number=None, text=cleaned)],
     )
 
 

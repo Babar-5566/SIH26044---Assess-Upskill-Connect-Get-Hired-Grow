@@ -1,6 +1,7 @@
 import React from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
+import { internshipApi } from './api/client'
 import AppLayout from './components/layout/AppLayout'
 
 // Auth pages
@@ -28,7 +29,7 @@ import MentorshipPage from './pages/platform/MentorshipPage'
 import OutcomesPage from './pages/platform/OutcomesPage'
 import JobsPage from './pages/platform/JobsPage'
 import OrganizationsPage from './pages/platform/OrganizationsPage'
-import AIAssistantPage from './pages/ai/AIAssistantPage'
+const AIAssistantPage = React.lazy(() => import('./pages/ai/AIAssistantPage'))
 
 function RequireAuth({ children, roles }: { children: React.ReactNode; roles?: string[] }) {
   const { user, effectiveRole, isLoading } = useAuth()
@@ -41,9 +42,7 @@ function RequireAuth({ children, roles }: { children: React.ReactNode; roles?: s
 function InstitutionStats() {
   const [stats, setStats] = React.useState<any>(null)
   React.useEffect(() => {
-    import('./api/client').then(({ internshipApi }) =>
-      internshipApi.getInstitutionStats().then(r => setStats(r.data))
-    )
+    internshipApi.getInstitutionStats().then(r => setStats(r.data))
   }, [])
   if (!stats) return <div className="text-gray-400">Loading stats…</div>
   return (
@@ -100,7 +99,7 @@ export default function App() {
           {/* Institution routes */}
           <Route path="/institution/stats" element={<RequireAuth roles={['INSTITUTION_ADMIN','FACULTY','institution']}><InstitutionStats /></RequireAuth>} />
           <Route path="/dashboard" element={<RequireAuth><RoleDashboard /></RequireAuth>} />
-          <Route path="/ai-assistant" element={<RequireAuth><AIAssistantPage /></RequireAuth>} />
+          <Route path="/ai-assistant" element={<RequireAuth><React.Suspense fallback={<div role="status" className="p-8 text-sm text-slate-500">Opening your AI workspace…</div>}><AIAssistantPage /></React.Suspense></RequireAuth>} />
           <Route path="/mentor/dashboard" element={<RequireAuth roles={['MENTOR_TRAINER']}><RoleDashboard /></RequireAuth>} />
           <Route path="/faculty/dashboard" element={<RequireAuth roles={['FACULTY','INSTITUTION_ADMIN']}><RoleDashboard /></RequireAuth>} />
           <Route path="/organizations" element={<RequireAuth><OrganizationsPage /></RequireAuth>} />

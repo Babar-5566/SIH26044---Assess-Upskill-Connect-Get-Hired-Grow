@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext'
 import { BookOpen, Briefcase, GraduationCap, LogOut, LayoutDashboard, Building2, Users, Sparkles } from 'lucide-react'
 
 export default function Sidebar() {
+  const [menuOpen, setMenuOpen] = React.useState(false)
   const { user, effectiveRole, activeOrganizationRole, logout } = useAuth()
   const navigate = useNavigate()
 
@@ -46,17 +47,17 @@ export default function Sidebar() {
 
 
   return (
-    <aside className="w-64 bg-white border-r border-gray-200 flex flex-col min-h-screen">
+    <aside className="w-full md:w-64 md:shrink-0 bg-white border-r border-gray-200 flex flex-col md:min-h-screen">
       <div className="p-6 border-b border-gray-100">
         <h1 className="text-xl font-bold text-blue-700">SkillBridge AI</h1>
-        <p className="text-xs text-gray-500 mt-1">Phase 12 & 13</p>
+        <button className="md:hidden mt-2 text-sm text-blue-700" onClick={() => setMenuOpen(!menuOpen)} aria-expanded={menuOpen} aria-controls="workspace-navigation">{menuOpen ? 'Close navigation' : 'Open navigation'}</button>
       </div>
-      <div className="p-4 border-b border-gray-100">
+      <div className={`${menuOpen ? '' : 'hidden md:block'} p-4 border-b border-gray-100`}>
         <p className="text-sm font-medium text-gray-800">{user?.full_name}</p>
         <span className="badge bg-blue-100 text-blue-700 mt-1">{effectiveRole}</span>
         {activeOrganizationRole && <p className="text-xs text-gray-400 mt-1">Organization role</p>}
       </div>
-      <nav className="flex-1 p-4 space-y-1">
+      <nav id="workspace-navigation" className={`${menuOpen ? '' : 'hidden md:block'} flex-1 p-4 space-y-1`}>
         {links.map((l) => (
           <NavLink
             key={l.to} to={l.to}
@@ -70,7 +71,7 @@ export default function Sidebar() {
           </NavLink>
         ))}
       </nav>
-      <div className="p-4 border-t border-gray-100">
+      <div className={`${menuOpen ? '' : 'hidden md:block'} p-4 border-t border-gray-100`}>
         <button onClick={handleLogout}
           className="flex items-center gap-2 text-sm text-gray-500 hover:text-red-600 transition-colors w-full">
           <LogOut size={16} /> Sign out

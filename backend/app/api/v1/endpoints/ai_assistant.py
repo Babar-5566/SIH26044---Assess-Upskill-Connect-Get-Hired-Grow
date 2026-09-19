@@ -1,21 +1,18 @@
-"""
-Enterprise Multi-LLM & Grounded RAG API Endpoints
-Skills: agency-backend-architect, agency-rag-pipeline-engineer, 
-        agency-application-security-engineer, agency-software-architect
-"""
+"""Authenticated Multi-LLM and document RAG endpoints."""
 
-import uuid
-import os
+import logging
 import re
+import uuid
 from pathlib import Path
-from typing import Optional, List
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query
+
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlalchemy.orm import Session
-from app.db.session import get_db
+from starlette.concurrency import run_in_threadpool
+
+from app.api.deps import get_current_user
 from app.core.config import settings
 from app.core.response import success
-from app.core.security import decode_token
-from app.api.deps import bearer
+from app.db.session import get_db
 from app.models import User
 from app.models.rag_document import RAGDocument
 from app.ai.multi_llm_orchestrator import multi_llm_orchestrator
@@ -24,330 +21,165 @@ from app.rag.chunker import RecursiveTextChunker
 from app.rag.embeddings import get_embedding_generator
 from app.rag.vector_store import vector_store
 from app.rag.engine import rag_engine
-from app.schemas.ai_assistant import (
-    CompareRequest,
-    ChatRequest,
-    RAGQueryRequest,
-    DocumentUploadResponse,
-    DocumentListItem,
-)
+from app.schemas.ai_assistant import CompareRequest, ChatRequest, RAGQueryRequest, DocumentUploadResponse, DocumentListItem
 
-router = APIRouter(prefix="/ai-assistant", tags=["Enterprise Multi-LLM & RAG Assistant"])
-
-
-def get_optional_user(credentials=Depends(bearer), db: Session = Depends(get_db)) -> Optional[User]:
-    """Resolves current user if token is provided; otherwise returns None gracefully."""
-    if not credentials:
-        return None
-    try:
-        payload = decode_token(credentials.credentials)
-        if not payload or not payload.get("sub"):
-            return None
-        user_id = uuid.UUID(str(payload["sub"]))
-        return db.get(User, user_id)
-    except Exception:
-        return None
+logger = logging.getLogger(__name__)
+router = APIRouter(prefix="/ai-assistant", tags=["Enterprise Multi-LLM & RAG Assistant"], dependencies=[Depends(get_current_user)])
 
 
 def sanitize_filename(name: str) -> str:
-    """Strips directory traversal components and non-safe characters.
-
-    Works cross-platform: replaces both forward and backslash separators
-    before extracting the basename, then removes any residual '..' segments.
-    """
-    # Normalise both slash styles to a common separator, then take basename
-    clean = name.replace("\\", "/")
-    clean = clean.split("/")[-1]          # equivalent to basename on all platforms
-    # Remove any residual '..' left after basename extraction
+    clean = name.replace("\\", "/").split("/")[-1]
     clean = re.sub(r"\.{2,}", "", clean)
-    # Strip non-safe characters (allow word chars, single dot, hyphen, space)
-    clean = re.sub(r"[^\w.\- ]", "_", clean)
-    return clean[:200]
+    return re.sub(r"[^\w.\- ]", "_", clean)[:200]
 
 
-# ─── Multi-LLM Comparison & Continuation ─────────────────────────────────────
+def owned_document(db: Session, document_id: uuid.UUID, user: User) -> RAGDocument:
+    document = db.query(RAGDocument).filter_by(id=document_id, user_id=user.id).first()
+    if document is None:
+        raise HTTPException(404, "Document not found.")
+    return document
+
+
+def document_summary(document: RAGDocument) -> dict:
+    return DocumentListItem(
+        id=str(document.id), original_filename=document.original_filename,
+        file_type=document.file_type, file_size_bytes=document.file_size_bytes,
+        chunk_count=document.chunk_count, status=document.status,
+        created_at=document.created_at.isoformat() if document.created_at else "",
+    ).model_dump()
+
 
 @router.post("/compare")
 async def compare_models(payload: CompareRequest):
-    """
-    Parallel Multi-LLM Arena: Dispatches the user prompt simultaneously to
-    OpenAI (GPT-4o), Anthropic (Claude 3.5 Sonnet), and Google (Gemini).
-    Returns responses side-by-side with latency (ms) and error containment.
-    """
-    responses = await multi_llm_orchestrator.compare_all(
-        prompt=payload.prompt,
-        system_prompt=payload.system_prompt,
-    )
-    return success([r.model_dump() for r in responses])
+    responses = await multi_llm_orchestrator.compare_all(prompt=payload.prompt, system_prompt=payload.system_prompt)
+    return success([response.model_dump() for response in responses])
 
 
 @router.post("/chat")
 async def chat_single_model(payload: ChatRequest):
-    """
-    Continue conversation with a designated single model with conversation memory.
-    """
     response = await multi_llm_orchestrator.chat_single(
-        provider=payload.provider,
-        prompt=payload.prompt,
-        system_prompt=payload.system_prompt,
-        conversation_history=payload.conversation_history,
+        provider=payload.provider, prompt=payload.prompt, system_prompt=payload.system_prompt,
+        conversation_history=[message.model_dump() for message in payload.conversation_history],
     )
     return success(response.model_dump())
 
 
 @router.get("/models")
 async def list_available_models():
-    """
-    Returns the configured status and active models for OpenAI, Claude, and Gemini.
-    """
-    statuses = multi_llm_orchestrator.get_providers_status()
-    return success(statuses)
+    return success(multi_llm_orchestrator.get_providers_status())
 
-
-# ─── Document Ingestion & Management ──────────────────────────────────────────
 
 @router.post("/documents/upload", status_code=201)
-async def upload_document(
-    file: UploadFile = File(...),
-    db: Session = Depends(get_db),
-    user: Optional[User] = Depends(get_optional_user),
-):
-    """
-    Ingests PDF, DOCX, or TXT document:
-    1. Validates file extension and size (<= 25MB).
-    2. Sanitizes filename and writes to storage/rag_documents.
-    3. Extracts text preserving page/section pointers.
-    4. Recursively splits text into overlapping chunks.
-    5. Computes vector embeddings in batches.
-    6. Persists vectors to NumPy index and registers metadata.
-    """
-    orig_filename = sanitize_filename(file.filename or "uploaded_document.txt")
-    ext = os.path.splitext(orig_filename)[1].lower()
+async def upload_document(file: UploadFile = File(...), db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    filename = sanitize_filename(file.filename or "uploaded_document.txt")
+    extension = Path(filename).suffix.lower()
+    if extension not in {".pdf", ".docx", ".txt"}:
+        raise HTTPException(400, "Unsupported file type. Allowed extensions: .pdf, .docx, .txt")
 
-    if ext not in (".pdf", ".docx", ".txt"):
-        raise HTTPException(
-            status_code=400,
-            detail=f"Unsupported file type '{ext}'. Allowed extensions: .pdf, .docx, .txt",
-        )
-
-    # Read bytes with size ceiling
+    # Bound the read even when the multipart body was already spooled to disk.
     max_bytes = settings.rag_max_file_size_mb * 1024 * 1024
-    content = await file.read()
+    content = await file.read(max_bytes + 1)
     if len(content) > max_bytes:
-        raise HTTPException(
-            status_code=413,
-            detail=f"File exceeds maximum allowed size of {settings.rag_max_file_size_mb} MB.",
-        )
-    if len(content) == 0:
-        raise HTTPException(status_code=400, detail="Uploaded file is empty.")
+        raise HTTPException(413, f"File exceeds maximum allowed size of {settings.rag_max_file_size_mb} MB.")
+    if not content:
+        raise HTTPException(400, "Uploaded file is empty.")
 
-    doc_id = str(uuid.uuid4())
-
-    # Save to disk
-    upload_dir = Path(settings.rag_storage_dir)
-    upload_dir.mkdir(parents=True, exist_ok=True)
-    saved_path = upload_dir / f"{doc_id}_{orig_filename}"
-    with open(saved_path, "wb") as f:
-        f.write(content)
-
-    # Parse document
+    document_id = str(uuid.uuid4())
     try:
-        parsed_doc = parse_document(content, orig_filename, doc_id)
+        parsed = await run_in_threadpool(parse_document, content, filename, document_id)
+        chunks = RecursiveTextChunker(settings.rag_chunk_size, settings.rag_chunk_overlap).chunk_document(parsed)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from None
     except Exception as exc:
-        saved_path.unlink(missing_ok=True)
-        raise HTTPException(status_code=422, detail=f"Document parsing failed: {str(exc)}")
-
-    # Chunk document
-    chunker = RecursiveTextChunker(
-        chunk_size=settings.rag_chunk_size,
-        chunk_overlap=settings.rag_chunk_overlap,
-    )
-    chunks = chunker.chunk_document(parsed_doc)
-
+        logger.warning("Document parsing failed (%s)", type(exc).__name__)
+        raise HTTPException(422, "Document could not be read. Check that it is a valid, unencrypted document.") from None
     if not chunks:
-        saved_path.unlink(missing_ok=True)
-        raise HTTPException(status_code=422, detail="No readable text chunks could be extracted from document.")
+        raise HTTPException(422, "No readable text could be extracted from document.")
 
-    # Tag user_id in chunk metadata if available
-    if user:
-        for c in chunks:
-            c.metadata["user_id"] = str(user.id)
-
-    # Generate embeddings
-    emb_gen = get_embedding_generator()
+    generator = get_embedding_generator()
+    for chunk in chunks:
+        chunk.metadata.update(user_id=str(user.id), embedding_space=generator.embedding_space)
     try:
-        embeddings = await emb_gen.generate_embeddings([c.content for c in chunks])
+        embeddings = await generator.generate_embeddings([chunk.content for chunk in chunks])
     except Exception as exc:
-        saved_path.unlink(missing_ok=True)
-        raise HTTPException(status_code=502, detail=f"Embedding generation failed: {str(exc)}")
+        logger.warning("Document embedding failed (%s)", type(exc).__name__)
+        raise HTTPException(502, "Embedding service unavailable. Check provider configuration and retry.") from None
 
-    # Add to Vector Store
-    vector_store.add_chunks(chunks, embeddings)
-
-    # Persist in DB
-    user_uuid = user.id if user else None
+    upload_dir = Path(settings.rag_storage_dir)
+    # UUID-only paths avoid reserved names and Windows path length surprises.
+    saved_path = upload_dir / f"{document_id}{extension}"
+    indexed = False
     try:
-        db_doc = RAGDocument(
-            id=uuid.UUID(doc_id),
-            user_id=user_uuid,
-            original_filename=orig_filename,
-            storage_path=str(saved_path),
-            file_type=ext.lstrip("."),
-            file_size_bytes=len(content),
-            chunk_count=len(chunks),
-            status="READY",
-        )
-        db.add(db_doc)
+        upload_dir.mkdir(parents=True, exist_ok=True)
+        db.add(RAGDocument(
+            id=uuid.UUID(document_id), user_id=user.id, original_filename=filename,
+            storage_path=str(saved_path), file_type=extension.lstrip("."),
+            file_size_bytes=len(content), chunk_count=len(chunks), status="READY",
+        ))
+        # Detect missing migrations/constraints before publishing vectors.
+        db.flush()
+        saved_path.write_bytes(content)
+        vector_store.add_chunks(chunks, embeddings)
+        indexed = True
         db.commit()
-    except Exception:
-        # DB error shouldn't block RAG retrieval if vector store succeeded
+    except Exception as exc:
         db.rollback()
+        if indexed:
+            vector_store.delete_document(document_id)
+        saved_path.unlink(missing_ok=True)
+        logger.warning("Document persistence failed (%s)", type(exc).__name__)
+        message = str(exc) if isinstance(exc, ValueError) else "Document could not be saved. Check storage and database migrations, then retry."
+        raise HTTPException(503, message) from None
 
-    response_payload = DocumentUploadResponse(
-        document_id=doc_id,
-        original_filename=orig_filename,
-        file_type=ext.lstrip("."),
-        file_size_bytes=len(content),
-        chunk_count=len(chunks),
-        status="READY",
-        message="Document successfully processed and indexed for RAG queries.",
-    )
-    return success(response_payload.model_dump())
+    return success(DocumentUploadResponse(
+        document_id=document_id, original_filename=filename, file_type=extension.lstrip("."),
+        file_size_bytes=len(content), chunk_count=len(chunks), status="READY",
+        message="Document is ready for questioning.",
+    ).model_dump())
 
 
 @router.get("/documents")
-async def list_documents(
-    db: Session = Depends(get_db),
-    user: Optional[User] = Depends(get_optional_user),
-):
-    """Lists all uploaded documents available in the system."""
-    try:
-        query = db.query(RAGDocument)
-        if user:
-            # If authenticated, show user's documents plus global
-            query = query.filter((RAGDocument.user_id == user.id) | (RAGDocument.user_id.is_(None)))
-        docs = query.order_by(RAGDocument.created_at.desc()).all()
-        doc_list = [
-            DocumentListItem(
-                id=str(d.id),
-                original_filename=d.original_filename,
-                file_type=d.file_type,
-                file_size_bytes=d.file_size_bytes,
-                chunk_count=d.chunk_count,
-                status=d.status,
-                created_at=d.created_at.isoformat() if d.created_at else "",
-            ).model_dump()
-            for d in docs
-        ]
-        return success(doc_list)
-    except Exception:
-        # Fallback to unique documents in vector store
-        seen = {}
-        for c in vector_store.chunks:
-            if c.document_id not in seen:
-                seen[c.document_id] = {
-                    "id": c.document_id,
-                    "original_filename": c.filename,
-                    "file_type": c.metadata.get("file_type", "unknown"),
-                    "file_size_bytes": 0,
-                    "chunk_count": 0,
-                    "status": "READY",
-                    "created_at": "",
-                }
-            seen[c.document_id]["chunk_count"] += 1
-        return success(list(seen.values()))
+def list_documents(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    documents = db.query(RAGDocument).filter_by(user_id=user.id).order_by(RAGDocument.created_at.desc()).all()
+    return success([document_summary(document) for document in documents])
 
 
 @router.get("/documents/{document_id}")
-async def get_document_details(
-    document_id: str,
-    db: Session = Depends(get_db),
-    user: Optional[User] = Depends(get_optional_user),
-):
-    """Retrieves metadata and all vectorized chunks for a specific document."""
-    matching_chunks = [c for c in vector_store.chunks if c.document_id == document_id]
-
-    doc_info = {
-        "id": document_id,
-        "original_filename": matching_chunks[0].filename if matching_chunks else "Document",
-        "file_type": matching_chunks[0].metadata.get("file_type", "unknown") if matching_chunks else "unknown",
-        "file_size_bytes": 0,
-        "chunk_count": len(matching_chunks),
-        "status": "READY",
-        "created_at": "",
-        "chunks": [c.model_dump() for c in matching_chunks],
-    }
-
-    try:
-        doc_uuid = uuid.UUID(document_id)
-        db_doc = db.query(RAGDocument).filter_by(id=doc_uuid).first()
-        if db_doc:
-            doc_info["original_filename"] = db_doc.original_filename
-            doc_info["file_type"] = db_doc.file_type
-            doc_info["file_size_bytes"] = db_doc.file_size_bytes
-            doc_info["chunk_count"] = db_doc.chunk_count or len(matching_chunks)
-            doc_info["status"] = db_doc.status
-            doc_info["created_at"] = db_doc.created_at.isoformat() if db_doc.created_at else ""
-    except Exception:
-        pass
-
-    if not matching_chunks and not doc_info.get("file_size_bytes"):
-        raise HTTPException(status_code=404, detail="Document not found.")
-
-    return success(doc_info)
+def get_document_details(document_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    document = owned_document(db, document_id, user)
+    chunks = [chunk.model_dump() for chunk in vector_store.chunks
+              if chunk.document_id == str(document_id) and chunk.metadata.get("user_id") == str(user.id)]
+    return success({**document_summary(document), "chunks": chunks})
 
 
 @router.delete("/documents/{document_id}")
-async def delete_document(
-    document_id: str,
-    db: Session = Depends(get_db),
-    user: Optional[User] = Depends(get_optional_user),
-):
-    """Deletes document chunks from vector index and cleans up metadata."""
-    deleted_chunks = vector_store.delete_document(document_id)
-
-    # Delete from DB
+async def delete_document(document_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    document = owned_document(db, document_id, user)
+    saved_path = Path(document.storage_path).resolve()
+    storage_root = Path(settings.rag_storage_dir).resolve()
+    if not saved_path.is_relative_to(storage_root) or saved_path == storage_root:
+        raise HTTPException(409, "Document storage path is invalid.")
+    # Authorization is complete before any file/index mutation.
     try:
-        doc_uuid = uuid.UUID(document_id)
-        db_doc = db.query(RAGDocument).filter_by(id=doc_uuid).first()
-        if db_doc:
-            if db_doc.storage_path and os.path.exists(db_doc.storage_path):
-                try:
-                    os.remove(db_doc.storage_path)
-                except Exception:
-                    pass
-            db.delete(db_doc)
-            db.commit()
-    except Exception:
+        deleted_chunks = vector_store.delete_document(str(document_id))
+        saved_path.unlink(missing_ok=True)
+        db.delete(document)
+        db.commit()
+    except Exception as exc:
         db.rollback()
+        logger.warning("Document deletion failed (%s)", type(exc).__name__)
+        raise HTTPException(503, "Document deletion could not be completed. Please retry.") from None
+    return success({"document_id": str(document_id), "deleted_chunks": deleted_chunks,
+                    "message": "Document and associated vectors successfully removed."})
 
-    return success({
-        "document_id": document_id,
-        "deleted_chunks": deleted_chunks,
-        "message": "Document and associated vectors successfully removed.",
-    })
-
-
-# ─── Grounded RAG Query ───────────────────────────────────────────────────────
 
 @router.post("/rag/query")
-async def query_rag(
-    payload: RAGQueryRequest,
-    user: Optional[User] = Depends(get_optional_user),
-):
-    """
-    Executes grounded RAG question answering over indexed documents:
-    - Retries Top-K chunks via Cosine Similarity.
-    - If no relevant context exists, strictly returns standard refusal message.
-    - Answers only from context and appends structured clickable citations [1], [2].
-    """
-    user_id_str = str(user.id) if user else None
+async def query_rag(payload: RAGQueryRequest, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    if payload.document_id is not None:
+        owned_document(db, payload.document_id, user)
     response = await rag_engine.query(
-        question=payload.question,
-        provider=payload.provider,
-        document_id=payload.document_id,
-        user_id=user_id_str,
-        top_k=payload.top_k,
-        similarity_threshold=payload.similarity_threshold,
+        question=payload.question, provider=payload.provider,
+        document_id=str(payload.document_id) if payload.document_id else None,
+        user_id=str(user.id), top_k=payload.top_k, similarity_threshold=payload.similarity_threshold,
     )
     return success(response.model_dump())

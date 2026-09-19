@@ -1,9 +1,8 @@
 """
-Vector Embedding Client with Batch Processing & Offline Fallback
+Vector Embedding Clients with Batch Processing and Explicit Offline Mode
 Skill: agency-rag-pipeline-engineer, agency-software-architect
 """
 
-import math
 import hashlib
 import asyncio
 from abc import ABC, abstractmethod
@@ -17,6 +16,10 @@ from app.core.config import settings
 class BaseEmbeddingGenerator(ABC):
     """Abstract interface for dense vector embeddings."""
 
+    @property
+    def embedding_space(self) -> str:
+        return f"{type(self).__name__}:{getattr(self, 'model', getattr(self, 'dimension', 'unknown'))}"
+
     @abstractmethod
     async def generate_embeddings(self, texts: List[str]) -> List[List[float]]:
         """Generate embedding vectors for a list of text chunks in batches."""
@@ -29,14 +32,13 @@ class BaseEmbeddingGenerator(ABC):
 
 
 class OpenAIEmbeddingGenerator(BaseEmbeddingGenerator):
-    """Production embedding generator using OpenAI text-embedding-3-small with graceful fallback."""
+    """Production embedding generator using OpenAI text-embedding-3-small with bounded requests."""
 
     def __init__(self, api_key: str, model: str = "text-embedding-3-small", batch_size: int = 64):
         base_url = "https://openrouter.ai/api/v1" if api_key.startswith("sk-or-v1") else None
-        self.client = AsyncOpenAI(api_key=api_key, base_url=base_url)
+        self.client = AsyncOpenAI(api_key=api_key, base_url=base_url, timeout=settings.ai_timeout_seconds, max_retries=0)
         self.model = model
         self.batch_size = batch_size
-        self._fallback = DeterministicFallbackEmbeddingGenerator()
 
     async def generate_embeddings(self, texts: List[str]) -> List[List[float]]:
         if not texts:
@@ -51,11 +53,13 @@ class OpenAIEmbeddingGenerator(BaseEmbeddingGenerator):
                     input=clean_batch,
                     model=self.model,
                 )
-                batch_vectors = [item.embedding for item in response.data]
+                ordered = sorted(response.data, key=lambda item: item.index)
+                if [item.index for item in ordered] != list(range(len(batch))):
+                    raise ValueError("Embedding response did not match the input batch.")
+                batch_vectors = [item.embedding for item in ordered]
                 all_embeddings.extend(batch_vectors)
             except Exception:
-                # Graceful fallback to deterministic embeddings on auth/quota/network failure
-                return await self._fallback.generate_embeddings(texts)
+                raise RuntimeError("Embedding service unavailable. Check provider configuration and retry.") from None
 
         return all_embeddings
 
@@ -68,8 +72,7 @@ class OpenAIEmbeddingGenerator(BaseEmbeddingGenerator):
             )
             return response.data[0].embedding
         except Exception:
-            # Graceful fallback to deterministic embeddings on auth/quota/network failure
-            return await self._fallback.generate_query_embedding(query)
+            raise RuntimeError("Embedding service unavailable. Check provider configuration and retry.") from None
 
 
 
@@ -116,7 +119,7 @@ class DeterministicFallbackEmbeddingGenerator(BaseEmbeddingGenerator):
 class GeminiEmbeddingGenerator(BaseEmbeddingGenerator):
     """
     Production embedding generator using Google Gemini models/gemini-embedding-001.
-    Outputs high-dimensional dense vector embeddings with fallback handling.
+    Outputs dense vectors; provider failures never switch embedding spaces.
     """
 
     def __init__(
@@ -128,16 +131,15 @@ class GeminiEmbeddingGenerator(BaseEmbeddingGenerator):
         self.api_key = api_key
         self.model = model if model.startswith("models/") else f"models/{model}"
         self.timeout_seconds = timeout_seconds
-        self._fallback = DeterministicFallbackEmbeddingGenerator()
 
     async def _embed_single(self, text: str, client: httpx.AsyncClient) -> List[float]:
         clean_text = text.strip() or " "
-        url = f"https://generativelanguage.googleapis.com/v1beta/{self.model}:embedContent?key={self.api_key}"
+        url = f"https://generativelanguage.googleapis.com/v1beta/{self.model}:embedContent"
         payload = {
             "model": self.model,
             "content": {"parts": [{"text": clean_text}]},
         }
-        res = await client.post(url, json=payload)
+        res = await client.post(url, headers={"x-goog-api-key": self.api_key}, json=payload)
         res.raise_for_status()
         data = res.json()
         return data["embedding"]["values"]
@@ -147,17 +149,19 @@ class GeminiEmbeddingGenerator(BaseEmbeddingGenerator):
             return []
         try:
             async with httpx.AsyncClient(timeout=self.timeout_seconds) as client:
-                tasks = [self._embed_single(t, client) for t in texts]
-                return await asyncio.gather(*tasks)
+                embeddings = []
+                for start in range(0, len(texts), 8):
+                    embeddings.extend(await asyncio.gather(*(self._embed_single(t, client) for t in texts[start:start + 8])))
+                return embeddings
         except Exception:
-            return await self._fallback.generate_embeddings(texts)
+            raise RuntimeError("Embedding service unavailable. Check provider configuration and retry.") from None
 
     async def generate_query_embedding(self, query: str) -> List[float]:
         try:
             async with httpx.AsyncClient(timeout=self.timeout_seconds) as client:
                 return await self._embed_single(query, client)
         except Exception:
-            return await self._fallback.generate_query_embedding(query)
+            raise RuntimeError("Embedding service unavailable. Check provider configuration and retry.") from None
 
 
 def get_embedding_generator() -> BaseEmbeddingGenerator:

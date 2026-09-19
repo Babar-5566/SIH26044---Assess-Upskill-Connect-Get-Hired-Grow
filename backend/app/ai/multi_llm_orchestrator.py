@@ -67,7 +67,7 @@ class MultiLLMOrchestrator:
                         content="",
                         latency_ms=0,
                         status="ERROR",
-                        error_message=f"Orchestrator task failure: {str(result)}",
+                        error_message="Provider request failed. Please retry later.",
                     )
                 )
             elif isinstance(result, LLMResponse):
@@ -108,11 +108,13 @@ class MultiLLMOrchestrator:
                 error_message=f"Provider '{provider}' is not recognized. Choose from: openai, claude, gemini.",
             )
 
-        return await adapter.generate_response(
-            prompt=prompt,
-            system_prompt=system_prompt,
-            conversation_history=conversation_history,
-        )
+        try:
+            return await adapter.generate_response(
+                prompt=prompt, system_prompt=system_prompt, conversation_history=conversation_history,
+            )
+        except Exception:
+            return LLMResponse(provider=provider_clean, model=adapter.model, content="", latency_ms=0,
+                               status="ERROR", error_message="Provider request failed. Please retry later.")
 
     def get_providers_status(self) -> List[Dict[str, Any]]:
         """Returns the readiness status and configured model for each provider."""

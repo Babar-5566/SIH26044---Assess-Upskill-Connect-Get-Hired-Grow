@@ -2,9 +2,9 @@ fastapi
 uvicorn[standard]
 sqlalchemy>=2
 psycopg[binary]
-alembic
+alembic>=1.13.3
 pydantic>=2
-pydantic-settings
+pydantic-settings>=2.7
 python-jose[cryptography]
 passlib[bcrypt]
 bcrypt<4.1

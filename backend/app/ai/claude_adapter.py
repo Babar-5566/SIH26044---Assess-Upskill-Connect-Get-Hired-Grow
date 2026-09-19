@@ -84,6 +84,8 @@ class ClaudeAdapter(BaseAsyncLLMClient):
                 b.text for b in response.content if getattr(b, "type", "") == "text"
             ]
             content = "".join(text_blocks)
+            if not content.strip():
+                raise ValueError("Provider returned no text")
 
             return LLMResponse(
                 provider=self.provider,
@@ -131,7 +133,7 @@ class ClaudeAdapter(BaseAsyncLLMClient):
                 content="",
                 latency_ms=elapsed_ms,
                 status="ERROR",
-                error_message=f"Anthropic API error: {exc.message if hasattr(exc, 'message') else str(exc)}",
+                error_message="Anthropic service unavailable. Please retry later.",
             )
         except Exception as exc:
             elapsed_ms = int((time.perf_counter() - start_time) * 1000)
@@ -141,5 +143,5 @@ class ClaudeAdapter(BaseAsyncLLMClient):
                 content="",
                 latency_ms=elapsed_ms,
                 status="ERROR",
-                error_message=f"Unexpected Claude error: {str(exc)}",
+                error_message="Claude request failed. Please retry later.",
             )
