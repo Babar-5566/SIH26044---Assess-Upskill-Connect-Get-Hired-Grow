@@ -3,8 +3,10 @@ import { ArrowRight, ArrowUp, BookOpen, Check, CheckCircle2, ChevronRight, Clock
 import { aiAssistantApi, getAssistantError, type CitationSource, type DocumentDetail, type DocumentItem, type LLMModelResult, type ModelStatus, type RAGQueryResult } from '../../api/aiAssistantApi'
 import { Answer, CopyButton, Dialog, EmptyState, LoadingAnswer, Notice, PROVIDERS, PROVIDER_IDS, ProviderMark, type Provider } from '../../components/ai/AssistantUI'
 import './assistant.css'
+import ProfileAI from '../../components/ai/ProfileAI'
+import { useAuth } from '../../context/AuthContext'
 
-type Tab = 'arena' | 'chat' | 'rag'
+type Tab = 'arena' | 'chat' | 'rag' | 'profile'
 type Message = { role: 'user' | 'assistant'; content: string }
 const EXAMPLES = [
   { label: 'Explore an idea', prompt: 'Compare microservices and monolithic architecture for a growing startup. Explain the trade-offs clearly.' },
@@ -19,7 +21,9 @@ const DOCUMENT_PROMPTS = [
 const sizeLabel = (bytes: number) => bytes >= 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`
 
 export default function AIAssistantPage() {
-  const [tab, setTab] = useState<Tab>('arena')
+  const { user, effectiveRole, activeOrganizationId } = useAuth()
+  const [tab, setTab] = useState<Tab>(new URLSearchParams(window.location.search).get('tab') === 'profile' ? 'profile' : 'arena')
+  const isStudent = effectiveRole?.toUpperCase() === 'STUDENT'
   const [connection, setConnection] = useState<'checking' | 'online' | 'offline'>('checking')
   const [models, setModels] = useState<ModelStatus[]>([])
   const [prompt, setPrompt] = useState('')
@@ -224,7 +228,7 @@ export default function AIAssistantPage() {
 
     {connection === 'offline' && <Notice onRetry={() => void refreshWorkspace()}>Your workspace cannot reach the server. Reconnect to load documents and send questions.</Notice>}
 
-    <nav className="ai-tabs" aria-label="Assistant workspace">
+    <nav className={'ai-tabs' + (isStudent ? ' with-profile' : '')} aria-label="Assistant workspace">
       {([
         { id: 'arena', label: 'Multi-LLM Arena', subtitle: 'Compare perspectives', icon: Layers3 },
         { id: 'chat', label: 'Continuous Chat', subtitle: 'Keep the conversation going', icon: MessageSquare },
@@ -232,7 +236,10 @@ export default function AIAssistantPage() {
       ] as const).map(item => <button type="button" key={item.id} aria-label={item.label} aria-pressed={tab === item.id} className={`ai-tab ${tab === item.id ? 'active' : ''}`} onClick={() => setTab(item.id)}>
         <item.icon size={19} /><span><strong>{item.label}</strong><small>{item.subtitle}</small></span><ChevronRight size={15} className="ai-tab-arrow" />
       </button>)}
+      {isStudent && <button type="button" aria-label="My Profile AI" aria-pressed={tab === 'profile'} className={'ai-tab ' + (tab === 'profile' ? 'active' : '')} onClick={() => setTab('profile')}><Sparkles size={19} /><span><strong>My Profile AI</strong><small>Your skills, resume & next step</small></span><ChevronRight size={15} className="ai-tab-arrow" /></button>}
     </nav>
+
+    {tab === 'profile' && (isStudent ? <ProfileAI key={(user?.id || '') + (activeOrganizationId || '')} models={models} onOpenDocuments={() => { setTab('rag'); void loadDocuments() }} /> : <Notice>Profile AI is available in a student account context.</Notice>)}
 
     {tab === 'arena' && <section className="ai-section ai-enter">
       <div className="ai-section-intro"><div><span className="ai-eyebrow">ONE QUESTION. THREE PERSPECTIVES.</span><h2>Good questions deserve a second opinion.</h2><p>Ask once, compare the answers, then continue with the model that fits.</p></div><span className="ai-subtle-pill"><Layers3 size={14} /> 3 models · side by side</span></div>

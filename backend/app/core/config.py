@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     cors_origins: Annotated[list[str], NoDecode] = ["http://localhost:5173", "http://localhost:3000"]
     upload_dir: str = "storage"
     max_resume_size_mb: int = 5
+    profile_analysis_worker_enabled: bool = True
     rate_limit_enabled: bool = True
     rate_limit_requests: int = 120
     rate_limit_window_seconds: int = 60

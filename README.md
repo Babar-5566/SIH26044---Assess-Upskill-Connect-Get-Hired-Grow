@@ -18,7 +18,8 @@ The canonical application is in `backend/` and `frontend/`; the root `app/` is
 legacy code. Run backend commands **from `backend/`** to load the correct package.
 See [the audit report](docs/AI_ASSISTANT_AUDIT.md) for fixes, tests, and remaining limitations.
 
-- Run `python -m alembic upgrade head` from `backend/` to create the RAG metadata table (revision `0012_rag_documents`).
+- Run `python -m alembic upgrade head` from `backend/` to create the RAG metadata and automatic resume analysis tables (head: `0013_profile_resume_analysis`).
+- **My Profile AI** connects your saved resume, skills, projects and documents, with source-backed chat and explainable job coverage. See [setup, behavior and verification](docs/PROFILE_AI.md).
 - All AI routes require a valid login. Documents are private to their uploading user; legacy unowned documents are not public.
 - New vector snapshots include the embedding model identity. Legacy indexes without that identity, or indexes made with another model, require deliberate re-indexing into a new vector directory. Keep original documents and a backup; do not delete the old index automatically.
 - Local vector storage supports one backend worker. No-key embeddings are a deterministic test/demo mode, not semantic production embeddings.
@@ -34,57 +35,227 @@ Powered by a modern **Enterprise Multi-LLM & RAG Assistant**, SkillBridge empowe
 
 ## 🏗️ Architecture & Data Flow
 
+The application runs from **`frontend/` (React + Vite)** and **`backend/` (FastAPI)**.
+The AI workspace has four tabs, with different sources and responsibilities:
+
+| Workspace tab | Input and sources | Result |
+|---|---|---|
+| **Multi-LLM Arena** | A question sent to three provider adapters in parallel | Side-by-side answers, response times and individual provider errors |
+| **Continuous Chat** | A question and the selected model's conversation history | A conversation with one model; history is separate per model in the browser |
+| **Document RAG & Citations** | Uploaded PDF/DOCX/TXT files, searched using embeddings | An answer from retrieved document excerpts, with clickable source references |
+| **My Profile AI** | The student's saved profile, active resume, selected supporting documents and optional target job | Skills, summaries, resume feedback, job coverage, cited personal answers and labeled skill learning |
+
+Arena and Continuous Chat do not automatically receive profile or document data.
+**My Profile AI automatically reads the resume file already saved in the app's profile.**
+The student does not need to upload that same resume again in Document RAG.
+
+### System overview
+
+The browser calls the backend; the backend checks access, reads the appropriate
+sources and calls external providers when generation is needed. Responses return
+through the API to the selected workspace tab. The arrows below show backend
+requests and data access.
+
 ```mermaid
-flowchart TD
-    subgraph Client ["Client Layer (React + Vite + TypeScript)"]
-        UI["Tailwind CSS + Lucide UI"]
-        Arena["Multi-LLM Arena"]
-        Chat["Continuous Multi-Turn Chat"]
-        RAGUI["Document Ingestion & RAG"]
-        Modal["In-App Animated Modals"]
+flowchart TB
+    Browser["React workspace<br/>Arena / Chat / Document RAG / Profile AI"]
+    API["FastAPI /api/v1<br/>JWT, role and source-ownership checks"]
+
+    subgraph Services ["Backend services"]
+        Chat["Multi-LLM orchestrator"]
+        RAG["Document ingestion and RAG"]
+        Profile["Profile analysis and personal chat"]
+        Platform["Profiles, learning, jobs and outcomes"]
     end
 
-    subgraph Gateway ["API Gateway (FastAPI 0.115+)"]
-        AuthGuard["JWT Auth & RBAC Guard"]
-        Router["/api/v1 Endpoints"]
+    subgraph Storage ["Storage managed by the backend"]
+        DB[("PostgreSQL<br/>Facts, resume bytes, jobs and metadata")]
+        Index[("NumPy index<br/>RAG chunks, embeddings and metadata")]
+        Files[("Local files<br/>Original RAG uploads")]
     end
 
-    subgraph Core ["Application Core & Services"]
-        StudentSvc["Student Lifecycle Service"]
-        OutcomeSvc["Employment Outcomes Tracker"]
-        RecSvc["Recommendation Engine"]
-        MultiLLM["Multi-LLM Async Dispatcher"]
-        RAGEngine["Adaptive RAG Pipeline"]
-    end
+    Providers["OpenAI / Claude / Gemini<br/>Selected model or parallel comparison"]
 
-    subgraph AIProviders ["External AI Providers"]
-        Gemini["Google Gemini API"]
-        OpenAI["OpenAI GPT-4o API"]
-        Claude["Anthropic Claude API"]
-        OpenRouter["OpenRouter Fallback"]
-    end
-
-    subgraph Storage ["Persistence Layer"]
-        PG[("PostgreSQL 16\n(Users, Profiles, Outcomes, Logs)")]
-        VectorStore[("NumPy Vector Store\n(Cosine Similarity Embeddings)")]
-        DocRepo[("Binary Document Storage\n(PostgreSQL BYTEA + Disk Cache)")]
-    end
-
-    UI --> Router
-    Arena --> Router
-    Chat --> Router
-    RAGUI --> Router
-    Modal --> Router
-
-    Router --> AuthGuard
-    AuthGuard --> StudentSvc & OutcomeSvc & RecSvc & MultiLLM & RAGEngine
-
-    MultiLLM -->|asyncio.gather| Gemini & OpenAI & Claude & OpenRouter
-    RAGEngine -->|Dense Embeddings| VectorStore
-    RAGEngine -->|Context Synthesis| Gemini
-    StudentSvc & OutcomeSvc & RecSvc --> PG
-    RAGUI --> DocRepo
+    Browser --> API
+    API --> Chat
+    API --> RAG
+    API --> Profile
+    API --> Platform
+    Chat --> Providers
+    RAG -->|Answer generation| Chat
+    Profile -->|Topic routing and answer generation| Chat
+    RAG --> DB
+    RAG --> Index
+    RAG --> Files
+    Profile --> DB
+    Profile -->|Selected supporting document chunks| Index
+    Platform --> DB
 ```
+
+OpenRouter belongs to the **separate platform recommendation fallback service**.
+It is not a fourth provider in the Arena, Document RAG or Profile AI comparison.
+Provider model names are configured on the backend.
+
+### 1. Multi-LLM comparison and continued chat
+
+```mermaid
+flowchart LR
+    Question["User question"] --> Compare["POST /ai-assistant/compare"]
+    Compare -->|Parallel request| OpenAI["OpenAI adapter"]
+    Compare -->|Parallel request| Claude["Claude adapter"]
+    Compare -->|Parallel request| Gemini["Gemini adapter"]
+    OpenAI --> Results["Collect each answer or error"]
+    Claude --> Results
+    Gemini --> Results
+    Results --> Cards["Side-by-side model cards"]
+    Cards --> Pick["Continue with a selected model"]
+    Pick --> History["Question and that model's history"]
+    History --> Single["POST /ai-assistant/chat"]
+    Single --> Selected["Selected provider only"]
+```
+
+The backend uses `asyncio.gather` for comparison. A failed or unconfigured provider
+returns its own error without discarding the other providers' answers. Continuous
+Chat keeps each model's history in the current browser page session; it is not
+persisted across reloads.
+
+### 2. Document RAG: upload first, then retrieve and answer
+
+**Ingestion** prepares a document for search. **Retrieval** selects relevant excerpts
+when the user asks a question. An embedding is a numeric representation used to
+compare the question with document chunks.
+
+```mermaid
+flowchart TB
+    subgraph Ingestion ["A. Upload and index"]
+        Upload["PDF / DOCX / TXT<br/>25 MB default limit"]
+        Validate["Validate file and size<br/>Extract and clean text"]
+        Chunks["Split into overlapping chunks<br/>Keep document, owner and page metadata"]
+        Embed["Generate chunk embeddings"]
+        Save["Save original file, metadata<br/>and chunk-vector snapshot"]
+        Ready["Document READY"]
+        Upload --> Validate --> Chunks --> Embed --> Save --> Ready
+    end
+
+    subgraph Retrieval ["B. Ask about ready documents"]
+        Ask["Question and optional document selection"]
+        QueryVector["Embed question in the same embedding space"]
+        Search["Cosine similarity search<br/>Filter by user, document and relevance"]
+        Context{"Relevant chunks found?"}
+        Generate["Selected OpenAI / Claude / Gemini model<br/>Question plus retrieved excerpts"]
+        Check["Validate citation IDs"]
+        Answer["Answer plus cited excerpts<br/>Filename and page when available"]
+        Refuse["Insufficient-information response"]
+        Ask --> QueryVector --> Search --> Context
+        Context -->|Yes| Generate --> Check
+        Context -->|No| Refuse
+        Check -->|Valid references| Answer
+        Check -->|Missing or invalid references| Refuse
+    end
+
+    Ready -->|Searchable index| Search
+```
+
+- Upload route: `POST /api/v1/ai-assistant/documents/upload`. Ingestion completes
+  within this request; the document becomes ready after it is saved successfully.
+- Question route: `POST /api/v1/ai-assistant/rag/query`. The answer model is selected
+  by the user and is independent of the embedding provider.
+- Embeddings use OpenAI when configured, otherwise Gemini when configured. With
+  neither configured, deterministic hash vectors support offline demos/tests.
+  Provider failures do not silently switch an existing embedding space.
+- Citations link to retrieved excerpts. PDF page numbers are preserved when
+  available; DOCX/TXT do not receive invented page numbers. Valid citation IDs
+  alone do not prove that every generated claim is supported.
+
+### 3. Profile AI: automatic saved-resume analysis
+
+Here, **auto-fetch means reading the active resume bytes stored in this app's
+database**. It does not mean downloading a resume from an arbitrary external URL.
+
+```mermaid
+flowchart TB
+    Upload["Save or replace resume in profile"]
+    Existing["Previously saved active resume"]
+    Queue[("PostgreSQL<br/>Saved resume and durable analysis job")]
+    Worker["Background worker in FastAPI<br/>Claim pending job and read active file"]
+    Extract["Extract text, skill mentions,<br/>sections, links and source chunks"]
+    Outcome{"Readable content?"}
+    Result[("PostgreSQL<br/>Analysis results and resume chunks")]
+    Attention["NEEDS_ATTENTION<br/>Explain the file issue and allow retry"]
+    Facts[("Live profile facts<br/>Skills, projects, education and experience")]
+    View["My Profile AI<br/>Summaries, resume review and skills to confirm"]
+
+    Upload -->|Save file and enqueue in one transaction| Queue
+    Existing -->|Migration or missing-job backfill| Queue
+    Queue --> Worker --> Extract --> Outcome
+    Outcome -->|Yes: READY| Result
+    Outcome -->|No| Attention
+    Result --> View
+    Facts --> View
+```
+
+The worker runs with the backend by default. Durable jobs survive restarts;
+expired processing leases can be retried. The UI polls while analysis is pending.
+A replaced or deleted resume is no longer eligible for new answers, and a worker
+processing an old upload cannot publish it as the current resume.
+
+After extraction, the following paths use the saved evidence:
+
+| Path | Data flow |
+|---|---|
+| **Profile facts and summaries** | Live profile tables + extracted resume facts → skills/project lists, three-line summaries and text-based quality checks. No LLM key is required. |
+| **Subject and learning links** | Recorded skills, resume mentions, project technologies and field of study → matching public/active-organization catalogue links. Ready study documents can open a cited conversation directly from the overview. |
+| **Personal chat** | Check source ownership and version → retrieve selected facts/chunks → route the question → selected LLM, or all three with the same context → citation and quotation checks → answer. |
+| **Skill learning** | Profile/project question → route against recorded topics → selected LLM, or all three with the same topic context → validate learning output → labeled general knowledge without resume citations. |
+| **Question guidance** | Unclear or unrecorded learning topic → clarification. Unrelated request → brief redirect. Every new question is evaluated; conversation history does not authorize unrelated subjects. |
+| **Job matching** | Open job posting or pasted JD → explicit/detected target skills → separate checks against resume text and profile records → keyword coverage, catalog learning links and suggested practice projects. |
+
+In **Profile, resume & learning** mode, "Who created Python?" can receive a general
+learning answer if Python is recorded; the same applies to Java or any other
+recorded topic. Such answers are labeled **Skill learning** and are not attributed
+to the resume. A later unrelated question is checked independently.
+
+The router uses saved skills, recognized resume skills, department and project
+technologies. Selected-project mode uses that project's technologies. It judges
+the requested task rather than using a food/sports keyword blacklist. Ambiguous
+wording needs one model classification before generation; topic IDs are validated,
+and a failed classification returns a retryable error. Model classification can
+make mistakes. **Resume only**, **My documents** and **Target job & my evidence**
+remain source-based modes. See [question handling](docs/PROFILE_AI.md#how-questions-are-handled).
+
+**Profile AI and Document RAG share supporting documents, but use different
+retrieval paths.** Profile AI uses bounded keyword retrieval over saved resume
+chunks and selected uploaded-document chunks. Document RAG uses embedding-based
+cosine search. A saved resume is not automatically copied into the RAG vector index.
+
+For example, upload `architecture.pdf` in **Document RAG**, then choose
+**My Profile AI → Sources → Selected project → Supporting document** to discuss
+that file alongside the project's saved details. Subject notes can also be
+selected as documents; the app does not automatically discover or associate them.
+
+Profile skills, resume mentions, job requirements and AI suggestions remain
+distinct. Accepting a suggested skill is an explicit user action. Job coverage
+does not treat a profile-only skill as evidence in the submitted resume, and is
+not a vendor ATS score or hiring prediction. Profile chat history clears when
+the model, scope or source version changes.
+
+### Storage and code map
+
+| Data | Storage | Main implementation |
+|---|---|---|
+| Profile, skills, projects and experience | PostgreSQL student tables | `backend/app/services/profile_context.py` |
+| Original saved resume | PostgreSQL `student_documents.file_data`; active flag selects the current version | `backend/app/api/v1/router.py` |
+| Resume processing jobs, results and text chunks | PostgreSQL `profile_resume_analyses` | `backend/app/services/profile_worker.py` and `profile_extraction.py` |
+| RAG document ownership, filename and file location | PostgreSQL `rag_documents` | `backend/app/api/v1/endpoints/ai_assistant.py` |
+| Original RAG uploads | Files under `RAG_STORAGE_DIR` | `backend/app/api/v1/endpoints/ai_assistant.py` |
+| RAG chunks, vectors and embedding identity | In-memory NumPy store, persisted to `RAG_VECTORS_DIR/index.npz` | `backend/app/rag/vector_store.py` |
+| Personal retrieval, question routing, chat and job coverage | Computed from current sources; source versions detect stale answers | `backend/app/services/profile_chat.py`, `profile_routing.py` and `profile_matching.py` |
+| Browser views and conversation state | React page memory | `frontend/src/pages/ai/AIAssistantPage.tsx` and `frontend/src/components/ai/ProfileAI.tsx` |
+
+The local RAG index supports **one backend worker**. Saved project/GitHub links
+are references; their remote contents are not fetched. Scanned-resume OCR and
+old binary DOC conversion are not implemented. See [Profile AI setup and
+limitations](docs/PROFILE_AI.md) for processing states, API contracts and examples.
 
 ---
 
@@ -196,7 +367,7 @@ flowchart TD
 
 6. **Start Backend Server**:
    ```bash
-   uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+   python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
    ```
    - API Docs (Swagger): `http://127.0.0.1:8000/docs`
    - ReDoc: `http://127.0.0.1:8000/redoc`
@@ -280,7 +451,7 @@ python -m pytest -q
 - `test_security_audit.py`: Role boundaries, unauthorized token rejections.
 
 ```text
-109 passed (offline tests; provider calls mocked or disabled)
+182 passed (offline tests; provider calls mocked or disabled)
 ```
 
 ### Automated End-to-End Verification

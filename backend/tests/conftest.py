@@ -10,6 +10,7 @@ for _key in ("OPENAI_API_KEY", "ANTHROPIC_API_KEY", "CLAUDE_API_KEY", "GEMINI_AP
 os.environ["RAG_STORAGE_DIR"] = os.path.join(_test_storage.name, "documents")
 os.environ["RAG_VECTORS_DIR"] = os.path.join(_test_storage.name, "vectors")
 os.environ["DEBUG"] = "false"
+os.environ["PROFILE_ANALYSIS_WORKER_ENABLED"] = "false"
 
 import pytest
 from fastapi.testclient import TestClient
