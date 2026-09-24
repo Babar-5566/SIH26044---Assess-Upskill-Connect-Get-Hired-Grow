@@ -11,3 +11,8 @@ python-multipart
 email-validator
 pytest
 httpx
+anthropic
+openai
+pypdf
+python-docx
+numpy
