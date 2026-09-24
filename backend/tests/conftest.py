@@ -1,3 +1,17 @@
+import os
+import tempfile
+import atexit
+
+# Test collection must never load live credentials or mutate the user's index.
+_test_storage = tempfile.TemporaryDirectory(prefix="skillbridge-tests-")
+atexit.register(_test_storage.cleanup)
+for _key in ("OPENAI_API_KEY", "ANTHROPIC_API_KEY", "CLAUDE_API_KEY", "GEMINI_API_KEY", "GOOGLE_API_KEY", "OPENROUTER_API_KEY"):
+    os.environ[_key] = ""
+os.environ["RAG_STORAGE_DIR"] = os.path.join(_test_storage.name, "documents")
+os.environ["RAG_VECTORS_DIR"] = os.path.join(_test_storage.name, "vectors")
+os.environ["DEBUG"] = "false"
+os.environ["PROFILE_ANALYSIS_WORKER_ENABLED"] = "false"
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine

@@ -1,5 +1,9 @@
 import { expect, test } from '@playwright/test'
 
+test.beforeEach(async ({ page }) => {
+  await page.route('**/api/v1/**', route => route.fulfill({ json: [] }))
+})
+
 test('anonymous users are redirected to login', async ({ page }) => {
   await page.goto('/student/jobs')
   await expect(page).toHaveURL(/\/login$/)

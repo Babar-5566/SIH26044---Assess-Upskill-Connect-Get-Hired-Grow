@@ -31,6 +31,9 @@ from app.api.v1.endpoints.outcomes import router as outcomes_router
 from app.api.v1.endpoints.resume_intelligence import router as resume_intelligence_router
 from app.api.v1.endpoints.readiness import router as readiness_router
 from app.api.v1.endpoints.notifications import router as notifications_router
+from app.api.v1.endpoints.ai_assistant import router as ai_assistant_router
+from app.api.v1.endpoints.profile_intelligence import router as profile_intelligence_router
+from app.services.profile_worker import enqueue_resume
 
 router = APIRouter()
 
@@ -225,7 +228,21 @@ def upload_resume(file: UploadFile = File(...), user=Depends(require_roles("STUD
     except ValueError as exc: raise HTTPException(400, str(exc))
     db.query(StudentDocument).filter_by(student_id=user.id, document_type="RESUME", is_active=True).update({"is_active": False})
     row = StudentDocument(student_id=user.id, file_name=safe_name, file_data=data, file_size=size, mime_type=mime_type)
-    db.add(row); user.profile.resume_file_url = f"/api/v1/students/me/resume/download"; db.commit(); db.refresh(row); return success(serialize(row))
+    db.add(row)
+    db.flush()
+    enqueue_resume(db, row)
+    user.profile.resume_file_url = "/api/v1/students/me/resume/download"
+    db.commit()
+    db.refresh(row)
+    return success(serialize(row))
+@students.delete("/resume", status_code=204)
+def delete_resume(user=Depends(require_roles("STUDENT")), db=Depends(get_db)):
+    # Remove bytes and extraction artifacts together, including replaced resumes.
+    from app.models import ProfileResumeAnalysis
+    db.query(ProfileResumeAnalysis).filter_by(student_id=user.id).delete()
+    db.query(StudentDocument).filter_by(student_id=user.id, document_type="RESUME").delete()
+    user.profile.resume_file_url = None
+    db.commit()
 @students.get("/resume")
 def get_resume(user=Depends(require_roles("STUDENT")), db=Depends(get_db)):
     row = db.query(StudentDocument).filter_by(student_id=user.id, document_type="RESUME", is_active=True).first()
@@ -272,3 +289,5 @@ router.include_router(outcomes_router)
 router.include_router(resume_intelligence_router)
 router.include_router(readiness_router)
 router.include_router(notifications_router)
+router.include_router(ai_assistant_router)
+router.include_router(profile_intelligence_router)

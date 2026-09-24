@@ -4,6 +4,13 @@ __pycache__/
 .packages/
 storage/*
 !storage/.gitkeep
+backend/storage/rag_documents/*
+!backend/storage/rag_documents/.gitkeep
+backend/storage/rag_vectors/*
+!backend/storage/rag_vectors/.gitkeep
+.playwright-mcp/
+delete_modal_verification.png
+live_browser_verification.png
 frontend/node_modules/
 frontend/dist/
 frontend/.env
