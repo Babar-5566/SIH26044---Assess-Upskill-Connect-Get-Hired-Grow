@@ -12,6 +12,7 @@ export default function Sidebar() {
 
   const studentLinks = [
     { to: '/student/learning', icon: <BookOpen size={18} />, label: 'Learning & Development' },
+    { to: '/ai-assistant', icon: <Sparkles size={18} className="text-blue-600" />, label: 'Multi-LLM & RAG AI' },
     { to: '/student/internships', icon: <Briefcase size={18} />, label: 'Internships' },
     { to: '/student/internships/applications', icon: <LayoutDashboard size={18} />, label: 'My Applications' },
     { to: '/student/certifications', icon: <GraduationCap size={18} />, label: 'Certifications' },
@@ -36,9 +37,9 @@ export default function Sidebar() {
   ]
   const mentorLinks = [{ to: '/student/mentorship', icon: <Users size={18} />, label: 'Mentees' }]
   const roleDashboard = { to: '/dashboard', icon: <LayoutDashboard size={18} />, label: 'Dashboard' }
-  const aiAssistantLink = { to: '/ai-assistant', icon: <Sparkles size={18} className="text-blue-600" />, label: 'Multi-LLM & RAG AI' }
+  // const aiAssistantLink = { to: '/ai-assistant', icon: <Sparkles size={18} className="text-blue-600" />, label: 'Multi-LLM & RAG AI' }
 
-  const links = [roleDashboard, aiAssistantLink, ...( 
+  const links = [roleDashboard, ...( 
     (effectiveRole === 'student' || effectiveRole === 'STUDENT') ? studentLinks :
     (effectiveRole === 'company' || effectiveRole === 'INDUSTRY_MEMBER_RECRUITER' || effectiveRole === 'INDUSTRY_ADMIN') ? companyLinks :
     (effectiveRole === 'academician' || effectiveRole === 'FACULTY') ? [...academicianLinks, ...institutionLinks] :
